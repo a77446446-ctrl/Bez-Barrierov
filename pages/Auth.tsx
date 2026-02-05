@@ -9,12 +9,12 @@ interface AuthProps {
 }
 
 const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
-  const { login, register } = useAuth();
+  const { login, register, loginWithGoogle } = useAuth();
   const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(() => {
     return searchParams.get('mode') !== 'register';
   });
-  
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -33,9 +33,9 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
     }
 
     if (roleParam === 'EXECUTOR') {
-        setRole(UserRole.EXECUTOR);
+      setRole(UserRole.EXECUTOR);
     } else if (roleParam === 'CUSTOMER') {
-        setRole(UserRole.CUSTOMER);
+      setRole(UserRole.CUSTOMER);
     }
   }, [searchParams]);
 
@@ -73,18 +73,35 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    try {
+      await loginWithGoogle();
+      toast.success('Успешный вход через Google!');
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        window.location.href = '/dashboard';
+      }
+    } catch (error) {
+      toast.error('Ошибка входа через Google');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50 py-12">
       <div className="max-w-md w-full animate-in zoom-in-95 duration-300">
         <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
           <div className="p-8 pb-0">
-             <div className="w-12 h-12 bg-careem-primary text-white rounded-xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-100">
-               <i className="fas fa-key text-xl"></i>
-             </div>
-             <h2 className="text-3xl font-black text-center text-gray-900 mb-2">{isLogin ? 'С возвращением!' : 'Присоединяйтесь'}</h2>
-             <p className="text-center text-gray-500 text-sm mb-8">
-               {isLogin ? 'Войдите в систему, чтобы управлять заказами' : 'Создайте аккаунт для доступа к сервису'}
-             </p>
+            <div className="w-12 h-12 bg-careem-primary text-white rounded-xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-100">
+              <i className="fas fa-key text-xl"></i>
+            </div>
+            <h2 className="text-3xl font-black text-center text-gray-900 mb-2">{isLogin ? 'С возвращением!' : 'Присоединяйтесь'}</h2>
+            <p className="text-center text-gray-500 text-sm mb-8">
+              {isLogin ? 'Войдите в систему, чтобы управлять заказами' : 'Создайте аккаунт для доступа к сервису'}
+            </p>
           </div>
 
           <div className="px-8 pb-8">
@@ -92,14 +109,14 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
               {!isLogin && (
                 <>
                   <div className="grid grid-cols-2 gap-2 mb-4">
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setRole(UserRole.CUSTOMER)}
                       className={`py-2 px-4 text-xs font-bold rounded-lg border-2 transition ${role === UserRole.CUSTOMER ? 'border-careem-primary bg-green-50 text-careem-primary' : 'border-gray-100 text-gray-400'}`}
                     >
                       Я заказчик
                     </button>
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setRole(UserRole.EXECUTOR)}
                       className={`py-2 px-4 text-xs font-bold rounded-lg border-2 transition ${role === UserRole.EXECUTOR ? 'border-careem-primary bg-green-50 text-careem-primary' : 'border-gray-100 text-gray-400'}`}
@@ -111,30 +128,30 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
                     <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Имя</label>
                     <div className="relative">
                       <i className="fas fa-user absolute left-4 top-3.5 text-gray-300"></i>
-                      <input 
-                        type="text" 
-                        required 
+                      <input
+                        type="text"
+                        required
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className="w-full bg-gray-50 border-gray-100 rounded-xl py-3 pl-12 pr-4 focus:ring-2 focus:ring-careem-primary focus:outline-none" 
-                        placeholder="Ваше имя" 
+                        className="w-full bg-gray-50 border-gray-100 rounded-xl py-3 pl-12 pr-4 focus:ring-2 focus:ring-careem-primary focus:outline-none"
+                        placeholder="Ваше имя"
                       />
                     </div>
                   </div>
                 </>
               )}
-              
+
               <div>
                 <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Email</label>
                 <div className="relative">
                   <i className="fas fa-envelope absolute left-4 top-3.5 text-gray-300"></i>
-                  <input 
-                    type="email" 
-                    required 
+                  <input
+                    type="email"
+                    required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-gray-50 border-gray-100 rounded-xl py-3 pl-12 pr-4 focus:ring-2 focus:ring-careem-primary focus:outline-none" 
-                    placeholder="name@example.com" 
+                    className="w-full bg-gray-50 border-gray-100 rounded-xl py-3 pl-12 pr-4 focus:ring-2 focus:ring-careem-primary focus:outline-none"
+                    placeholder="name@example.com"
                   />
                 </div>
               </div>
@@ -143,13 +160,13 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
                 <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Пароль</label>
                 <div className="relative">
                   <i className="fas fa-lock absolute left-4 top-3.5 text-gray-300"></i>
-                  <input 
-                    type="password" 
-                    required 
+                  <input
+                    type="password"
+                    required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-gray-50 border-gray-100 rounded-xl py-3 pl-12 pr-4 focus:ring-2 focus:ring-careem-primary focus:outline-none" 
-                    placeholder="••••••••" 
+                    className="w-full bg-gray-50 border-gray-100 rounded-xl py-3 pl-12 pr-4 focus:ring-2 focus:ring-careem-primary focus:outline-none"
+                    placeholder="••••••••"
                   />
                 </div>
               </div>
@@ -181,7 +198,7 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
             </form>
 
             <div className="mt-6 text-center">
-              <button 
+              <button
                 onClick={() => setIsLogin(!isLogin)}
                 className="text-sm text-careem-primary hover:text-green-800 font-medium"
               >
@@ -192,16 +209,16 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
             <div className="mt-8 pt-8 border-t border-gray-100 text-center">
               <p className="text-xs text-gray-400 mb-4">Или войти через</p>
               <div className="flex justify-center gap-4">
-                 <button className="w-10 h-10 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-[#24A1DE] hover:bg-gray-50 transition"><i className="fab fa-telegram-plane"></i></button>
-                 <button className="w-10 h-10 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-red-500 hover:bg-gray-50 transition"><i className="fab fa-google"></i></button>
+                <button className="w-10 h-10 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-[#24A1DE] hover:bg-gray-50 transition"><i className="fab fa-telegram-plane"></i></button>
+                <button onClick={handleGoogleLogin} type="button" className="w-10 h-10 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-red-500 hover:bg-gray-50 transition"><i className="fab fa-google"></i></button>
               </div>
             </div>
           </div>
         </div>
         {!isLogin && (
-           <p className="mt-8 text-center text-[10px] text-gray-400 leading-relaxed px-4">
-             Регистрируясь, вы подтверждаете свое согласие с <Link to="/terms" className="underline hover:text-gray-500">публичной офертой</Link> и правилами обработки персональных данных.
-           </p>
+          <p className="mt-8 text-center text-[10px] text-gray-400 leading-relaxed px-4">
+            Регистрируясь, вы подтверждаете свое согласие с <Link to="/terms" className="underline hover:text-gray-500">публичной офертой</Link> и правилами обработки персональных данных.
+          </p>
         )}
       </div>
     </div>

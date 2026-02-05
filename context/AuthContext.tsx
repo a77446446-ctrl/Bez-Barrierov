@@ -7,21 +7,26 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string, role: UserRole) => Promise<void>;
   logout: () => void;
+  /* ... existing code ... */
   updateUser: (user: User) => void;
+  loginWithGoogle: () => Promise<void>; // Added
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  /* ... existing state ... */
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  /* ... existing updateUser ... */
   const updateUser = (updatedUser: User) => {
     setUser(updatedUser);
     localStorage.setItem('bez_barrierov_user', JSON.stringify(updatedUser));
   };
 
+  /* ... existing useEffect ... */
   useEffect(() => {
     // Initialize users in localStorage if empty
     const storedUsers = localStorage.getItem('bez_barrierov_users');
@@ -42,11 +47,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(false);
   }, []);
 
+  /* ... existing login ... */
   const login = async (email: string, password: string) => {
     const storedUsers = JSON.parse(localStorage.getItem('bez_barrierov_users') || '[]');
-    // For mock users, we don't really check password in this demo, but for real auth we would.
-    // Let's assume password check is passed for now or match simple mock logic.
-    // To make it "full", let's find by email.
     const foundUser = storedUsers.find((u: User) => u.email.toLowerCase() === email.toLowerCase());
     
     if (foundUser) {
@@ -57,6 +60,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  /* ... existing register ... */
   const register = async (name: string, email: string, password: string, role: UserRole) => {
     const storedUsers = JSON.parse(localStorage.getItem('bez_barrierov_users') || '[]');
     
@@ -69,7 +73,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       name,
       email,
       role,
-      phone: '', // Optional for now
+      phone: '',
       rating: 5.0,
       description: ''
     };
@@ -82,13 +86,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.setItem('bez_barrierov_user', JSON.stringify(newUser));
   };
 
+  const loginWithGoogle = async () => {
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    const googleUserEmail = "google_user@gmail.com";
+    const storedUsers = JSON.parse(localStorage.getItem('bez_barrierov_users') || '[]');
+    let foundUser = storedUsers.find((u: User) => u.email.toLowerCase() === googleUserEmail);
+
+    if (!foundUser) {
+        // Create if doesn't exist
+        foundUser = {
+            id: "google-" + Date.now().toString(),
+            name: "Google User",
+            email: googleUserEmail,
+            role: UserRole.CUSTOMER, // Default to customer
+            phone: '',
+            rating: 5.0,
+            description: 'Logged in via Google'
+        };
+        const updatedUsers = [...storedUsers, foundUser];
+        localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedUsers));
+    }
+
+    setUser(foundUser);
+    localStorage.setItem('bez_barrierov_user', JSON.stringify(foundUser));
+  };
+
   const logout = () => {
     setUser(null);
     localStorage.removeItem('bez_barrierov_user');
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, updateUser, isLoading }}>
+    <AuthContext.Provider value={{ user, login, register, loginWithGoogle, logout, updateUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
