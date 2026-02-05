@@ -1,7 +1,0 @@
-{
-  "name": "Bez Barrierov (Barrier-free)",
-  "description": "An MVP platform connecting people with limited mobility to verified assistants. Features role-based dashboards, search by location, subscription models for executors, and Telegram bot integration simulation.",
-  "requestFramePermissions": [
-    "geolocation"
-  ]
-}

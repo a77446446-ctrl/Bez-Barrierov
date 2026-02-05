@@ -22,25 +22,25 @@ const MapInvalidator = () => {
 };
 
 // Helper component for map events
-const DashboardMapEvents = ({ 
-  setLocationCoords, 
-  setLocationAddress, 
-  setHasUnsavedChanges 
+const DashboardMapEvents = ({
+  setLocationCoords,
+  setLocationAddress,
+  setHasUnsavedChanges
 }: any) => {
   useMapEvents({
     click(e) {
       const { lat, lng } = e.latlng;
       setLocationCoords({ lat, lng });
       setHasUnsavedChanges(true);
-      
+
       // Reverse geocoding
       fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
         .then(response => response.json())
         .then(data => {
-            if (data && data.display_name) {
-                setLocationAddress(data.display_name);
-                setLocationCoords((prev: any) => ({ ...prev, address: data.display_name }));
-            }
+          if (data && data.display_name) {
+            setLocationAddress(data.display_name);
+            setLocationCoords((prev: any) => ({ ...prev, address: data.display_name }));
+          }
         })
         .catch(err => console.error('Geocoding error:', err));
     },
@@ -57,7 +57,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const { updateUser } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'orders' | 'profile' | 'subscription'>('orders');
-  
+
   // Initialize orders from localStorage or fall back to MOCK_ORDERS
   const [orders, setOrders] = useState<Order[]>(() => {
     const stored = localStorage.getItem('bez_barrierov_orders');
@@ -87,7 +87,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
     })
   );
   const [showOpenOrders, setShowOpenOrders] = useState(false);
-  
+
   // Profile State
   const [locationCoords, setLocationCoords] = useState<Location | undefined>(user.locationCoordinates);
   const [locationAddress, setLocationAddress] = useState<string>(user.locationCoordinates?.address || '');
@@ -95,7 +95,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState(user.avatar);
   const [vehiclePhotoPreview, setVehiclePhotoPreview] = useState(user.vehiclePhoto);
-  
+
   // Helper for map events handled inline
 
 
@@ -143,10 +143,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
       }
       return o;
     });
-    
+
     setOrders(updatedOrders);
     localStorage.setItem('bez_barrierov_orders', JSON.stringify(updatedOrders));
-    
+
     // Call parent handler for notifications
     onUpdateStatus(orderId, newStatus, rejectionReason);
   };
@@ -168,19 +168,19 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
       const updatedOrders = orders.map(o => {
         if (o.id === rejectingOrderId) {
           const isOpen = o.allowOpenSelection !== false; // Default to true if undefined (legacy) or explicitly true
-          return { 
-            ...o, 
-            status: isOpen ? OrderStatus.OPEN : OrderStatus.REJECTED, 
+          return {
+            ...o,
+            status: isOpen ? OrderStatus.OPEN : OrderStatus.REJECTED,
             rejectionReason: rejectionReason,
             executorId: isOpen ? undefined : o.executorId
           };
         }
         return o;
       });
-      
+
       setOrders(updatedOrders);
       localStorage.setItem('bez_barrierov_orders', JSON.stringify(updatedOrders));
-      
+
       setRejectingOrderId(null);
       setRejectionReason('');
     }
@@ -191,7 +191,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState('');
   const [viewingCustomer, setViewingCustomer] = useState<User | null>(null);
-  
+
   // Subscription Cancellation State
   const [isCancelSubscriptionModalOpen, setIsCancelSubscriptionModalOpen] = useState(false);
   const [cancelSubscriptionReason, setCancelSubscriptionReason] = useState('');
@@ -213,7 +213,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
     // In a real app, we would verify the password with the backend
     // Here we just simulate verification (accept any non-empty password)
-    
+
     // 1. Remove user from allUsers
     const updatedUsers = allUsers.filter(u => u.id !== user.id);
     setAllUsers(updatedUsers);
@@ -221,7 +221,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
     // 2. Clear current session
     localStorage.removeItem('bez_barrierov_user');
-    
+
     // 3. Redirect to home/auth
     window.location.href = '/auth';
   };
@@ -231,8 +231,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
       // 1. Update Order
       const updatedOrders = orders.map(o => {
         if (o.id === completingOrderId) {
-          return { 
-            ...o, 
+          return {
+            ...o,
             status: OrderStatus.COMPLETED,
             rating: reviewRating,
             review: reviewText
@@ -257,7 +257,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
               text: reviewText,
               date: new Date().toLocaleDateString()
             };
-            
+
             const newReviews = [...currentReviews, newReview];
             const totalRating = newReviews.reduce((sum, r) => sum + r.rating, 0);
             const newAverageRating = Number((totalRating / newReviews.length).toFixed(1));
@@ -278,7 +278,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
       setCompletingOrderId(null);
       setReviewRating(5);
       setReviewText('');
-      
+
       // Notify parent/system
       onUpdateStatus(completingOrderId, OrderStatus.COMPLETED);
     }
@@ -289,8 +289,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
       if (o.id === orderId) {
         const responses = o.responses || [];
         if (!responses.includes(user.id)) {
-          return { 
-            ...o, 
+          return {
+            ...o,
             responses: [...responses, user.id]
           };
         }
@@ -310,8 +310,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const handleSelectExecutor = (orderId: string, executorId: string) => {
     const updatedOrders = orders.map(o => {
       if (o.id === orderId) {
-        return { 
-          ...o, 
+        return {
+          ...o,
           status: OrderStatus.CONFIRMED,
           executorId: executorId,
           responses: [] // Clear responses as one is selected
@@ -325,30 +325,30 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
   const handleSubscribeRequest = (customerId: string) => {
     // 1. Update Executor (me) state -> pending, requestTo
-    const updatedUser = { 
-      ...user, 
-      subscriptionStatus: 'pending' as const, 
-      subscriptionRequestToCustomerId: customerId 
+    const updatedUser = {
+      ...user,
+      subscriptionStatus: 'pending' as const,
+      subscriptionRequestToCustomerId: customerId
     };
-    
+
     // Update local storage for current user
     localStorage.setItem('bez_barrierov_user', JSON.stringify(updatedUser));
-    
+
     // 2. Update All Users list (to persist changes)
     const updatedAllUsers = allUsers.map(u => {
       if (u.id === user.id) return updatedUser;
       return u;
     });
     localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedAllUsers));
-    
+
     // 3. Notify Customer (simulated via local storage or just state if real-time)
     // In a real app, we would send a request to backend. 
     // Here we rely on the Customer checking their dashboard and seeing the request.
     // We can simulate a "notification" by adding a flag to the customer object too?
     // Let's rely on the Customer Dashboard logic checking for incoming requests.
-    
+
     // Force reload/update (simplified)
-    window.location.reload(); 
+    window.location.reload();
     alert('Запрос на подписку отправлен! Ожидайте подтверждения от заказчика.');
   };
 
@@ -384,7 +384,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
       return u;
     });
     localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedAllUsers));
-    
+
     // Force update
     setAllUsers(updatedAllUsers);
     updateUser(updatedCustomer);
@@ -392,10 +392,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   };
 
   const handleRenewSubscription = () => {
-      // Reset to initial state or open modal to request again
-       if (user.subscribedToCustomerId) {
-           handleSubscribeRequest(user.subscribedToCustomerId);
-       }
+    // Reset to initial state or open modal to request again
+    if (user.subscribedToCustomerId) {
+      handleSubscribeRequest(user.subscribedToCustomerId);
+    }
   };
 
   const getActiveSubscriber = (customerId: string) => {
@@ -405,13 +405,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const handleDismissNotification = (notificationId: string) => {
     const updatedNotifications = (user.notifications || []).filter(n => n.id !== notificationId);
     const updatedUser = { ...user, notifications: updatedNotifications };
-    
+
     // Update allUsers and localStorage
     const updatedAllUsers = allUsers.map(u => {
-        if (u.id === user.id) return updatedUser;
-        return u;
+      if (u.id === user.id) return updatedUser;
+      return u;
     });
-    
+
     setAllUsers(updatedAllUsers);
     localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedAllUsers));
     updateUser(updatedUser);
@@ -422,100 +422,100 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
     // Handle Customer cancelling Executor
     if (user.role === UserRole.CUSTOMER) {
-        const activeSubscriber = getActiveSubscriber(user.id);
-        if (!activeSubscriber) return;
+      const activeSubscriber = getActiveSubscriber(user.id);
+      if (!activeSubscriber) return;
 
-        // Create notification for Executor
-        const notification: Notification = {
-            id: Date.now().toString(),
-            type: 'warning',
-            title: 'Подписка отменена',
-            message: `Заказчик ${user.name} отменил подписку.`,
-            date: new Date().toISOString(),
-            read: false
-        };
+      // Create notification for Executor
+      const notification: Notification = {
+        id: Date.now().toString(),
+        type: 'warning',
+        title: 'Подписка отменена',
+        message: `Заказчик ${user.name} отменил подписку.`,
+        date: new Date().toISOString(),
+        read: false
+      };
 
-        // Reset Executor Subscription
-        const updatedExecutor = {
-          ...activeSubscriber,
-          subscriptionStatus: 'none' as const,
-          subscribedToCustomerId: undefined,
-          subscriptionStartDate: undefined,
-          subscriptionEndDate: undefined,
-          subscriptionRequestToCustomerId: undefined,
-          notifications: [...(activeSubscriber.notifications || []), notification]
-        };
+      // Reset Executor Subscription
+      const updatedExecutor = {
+        ...activeSubscriber,
+        subscriptionStatus: 'none' as const,
+        subscribedToCustomerId: undefined,
+        subscriptionStartDate: undefined,
+        subscriptionEndDate: undefined,
+        subscriptionRequestToCustomerId: undefined,
+        notifications: [...(activeSubscriber.notifications || []), notification]
+      };
 
-        // Reset Customer Subscription (me)
-        const updatedCustomer = {
-          ...user,
-          subscriptionStatus: 'none' as const,
-          subscribedExecutorId: undefined
-        };
+      // Reset Customer Subscription (me)
+      const updatedCustomer = {
+        ...user,
+        subscriptionStatus: 'none' as const,
+        subscribedExecutorId: undefined
+      };
 
-        const updatedAllUsers = allUsers.map(u => {
-          if (u.id === activeSubscriber.id) return updatedExecutor;
-          if (u.id === user.id) return updatedCustomer;
-          return u;
-        });
-        setAllUsers(updatedAllUsers);
-        localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedAllUsers));
-        updateUser(updatedCustomer);
-        
-        setIsCancelSubscriptionModalOpen(false);
-        setCancelSubscriptionReason('');
-        alert('Подписка помощника отменена.');
-    } 
+      const updatedAllUsers = allUsers.map(u => {
+        if (u.id === activeSubscriber.id) return updatedExecutor;
+        if (u.id === user.id) return updatedCustomer;
+        return u;
+      });
+      setAllUsers(updatedAllUsers);
+      localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedAllUsers));
+      updateUser(updatedCustomer);
+
+      setIsCancelSubscriptionModalOpen(false);
+      setCancelSubscriptionReason('');
+      alert('Подписка помощника отменена.');
+    }
     // Handle Executor cancelling their own subscription
     else if (user.role === UserRole.EXECUTOR) {
-        const customerId = user.subscribedToCustomerId;
-        
-        const customer = customerId ? allUsers.find(u => u.id === customerId) : null;
+      const customerId = user.subscribedToCustomerId;
 
-        // Reset Customer Subscription (if exists)
-        let updatedCustomer = null;
-        if (customer) {
-             // Create notification for Customer
-             const notification: Notification = {
-                id: Date.now().toString(),
-                type: 'warning',
-                title: 'Подписка отменена',
-                message: `Ваш помощник ${user.name} отменил подписку. Причина: ${cancelSubscriptionReason || 'Не указана'}`,
-                date: new Date().toISOString(),
-                read: false
-             };
+      const customer = customerId ? allUsers.find(u => u.id === customerId) : null;
 
-             updatedCustomer = {
-                ...customer,
-                subscriptionStatus: 'none' as const,
-                subscribedExecutorId: undefined,
-                notifications: [...(customer.notifications || []), notification]
-            };
-        }
-
-        // Reset Executor Subscription (me)
-        const updatedExecutor = {
-          ...user,
-          subscriptionStatus: 'none' as const,
-          subscribedToCustomerId: undefined,
-          subscriptionStartDate: undefined,
-          subscriptionEndDate: undefined,
-          subscriptionRequestToCustomerId: undefined
+      // Reset Customer Subscription (if exists)
+      let updatedCustomer = null;
+      if (customer) {
+        // Create notification for Customer
+        const notification: Notification = {
+          id: Date.now().toString(),
+          type: 'warning',
+          title: 'Подписка отменена',
+          message: `Ваш помощник ${user.name} отменил подписку. Причина: ${cancelSubscriptionReason || 'Не указана'}`,
+          date: new Date().toISOString(),
+          read: false
         };
 
-        const updatedAllUsers = allUsers.map(u => {
-          if (u.id === user.id) return updatedExecutor;
-          if (updatedCustomer && u.id === customer.id) return updatedCustomer;
-          return u;
-        });
-        
-        setAllUsers(updatedAllUsers);
-        localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedAllUsers));
-        updateUser(updatedExecutor);
-        
-        setIsCancelSubscriptionModalOpen(false);
-        setCancelSubscriptionReason('');
-        alert('Ваша подписка отменена.');
+        updatedCustomer = {
+          ...customer,
+          subscriptionStatus: 'none' as const,
+          subscribedExecutorId: undefined,
+          notifications: [...(customer.notifications || []), notification]
+        };
+      }
+
+      // Reset Executor Subscription (me)
+      const updatedExecutor = {
+        ...user,
+        subscriptionStatus: 'none' as const,
+        subscribedToCustomerId: undefined,
+        subscriptionStartDate: undefined,
+        subscriptionEndDate: undefined,
+        subscriptionRequestToCustomerId: undefined
+      };
+
+      const updatedAllUsers = allUsers.map(u => {
+        if (u.id === user.id) return updatedExecutor;
+        if (updatedCustomer && u.id === customer.id) return updatedCustomer;
+        return u;
+      });
+
+      setAllUsers(updatedAllUsers);
+      localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedAllUsers));
+      updateUser(updatedExecutor);
+
+      setIsCancelSubscriptionModalOpen(false);
+      setCancelSubscriptionReason('');
+      alert('Ваша подписка отменена.');
     }
   };
 
@@ -530,7 +530,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   };
 
   const getStatusColor = (status: OrderStatus) => {
-    switch(status) {
+    switch (status) {
       case OrderStatus.CONFIRMED: return 'text-green-600 bg-green-50';
       case OrderStatus.PENDING: return 'text-amber-600 bg-amber-50';
       case OrderStatus.OPEN: return 'text-careem-primary bg-green-50';
@@ -542,7 +542,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   };
 
   const getStatusLabel = (status: OrderStatus) => {
-    switch(status) {
+    switch (status) {
       case OrderStatus.CONFIRMED: return 'Подтвержден';
       case OrderStatus.PENDING: return 'Ожидает';
       case OrderStatus.OPEN: return 'Свободен';
@@ -555,18 +555,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
   // Check for subscription expiry (mock logic)
   useEffect(() => {
-      if (user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'active' && user.subscriptionEndDate) {
-          const endDate = new Date(user.subscriptionEndDate);
-          const now = new Date();
-          const daysLeft = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
-          
-          if (daysLeft <= 0) {
-               // Expired
-               const updatedUser = { ...user, subscriptionStatus: 'expired' as const };
-               localStorage.setItem('bez_barrierov_user', JSON.stringify(updatedUser));
-               // Force reload logic or state update would go here
-          }
+    if (user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'active' && user.subscriptionEndDate) {
+      const endDate = new Date(user.subscriptionEndDate);
+      const now = new Date();
+      const daysLeft = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
+
+      if (daysLeft <= 0) {
+        // Expired
+        const updatedUser = { ...user, subscriptionStatus: 'expired' as const };
+        localStorage.setItem('bez_barrierov_user', JSON.stringify(updatedUser));
+        // Force reload logic or state update would go here
       }
+    }
   }, [user]);
 
   // Subscription Active View for Executor - Integrated into main dashboard
@@ -574,131 +574,129 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
   // Pending Subscription View for Executor (Optional, but good UX)
   if (user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'pending') {
-     return (
-        <div className="max-w-7xl mx-auto px-4 py-8 min-h-[80vh] flex items-center justify-center">
-             <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 max-w-md w-full text-center">
-                 <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-                     <i className="fas fa-clock text-3xl text-blue-500"></i>
-                 </div>
-                 <h2 className="text-xl font-bold text-gray-900 mb-2">Ожидание подтверждения</h2>
-                 <p className="text-gray-500">Заказчик должен подтвердить ваш запрос на подписку.</p>
-             </div>
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8 min-h-[80vh] flex items-center justify-center">
+        <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 max-w-md w-full text-center">
+          <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+            <i className="fas fa-clock text-3xl text-blue-500"></i>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Ожидание подтверждения</h2>
+          <p className="text-gray-500">Заказчик должен подтвердить ваш запрос на подписку.</p>
         </div>
-     );
+      </div>
+    );
   }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 animate-in slide-in-from-right-4 duration-500">
       {/* Notifications */}
       {user.notifications && user.notifications.length > 0 && (
-          <div className="mb-8 space-y-4">
-              {user.notifications.map(notification => (
-                  <div key={notification.id} className={`p-4 rounded-xl border flex items-start justify-between ${
-                      notification.type === 'warning' ? 'bg-red-50 border-red-100 text-red-800' : 
-                      notification.type === 'success' ? 'bg-green-50 border-green-100 text-green-800' : 
-                      'bg-blue-50 border-blue-100 text-blue-800'
-                  } animate-in slide-in-from-top-4`}>
-                      <div className="flex items-start gap-3">
-                          <i className={`fas ${
-                              notification.type === 'warning' ? 'fa-exclamation-circle' : 
-                              notification.type === 'success' ? 'fa-check-circle' : 
-                              'fa-info-circle'
-                          } mt-1`}></i>
-                          <div>
-                              <h4 className="font-bold">{notification.title}</h4>
-                              <p className="text-sm opacity-90">{notification.message}</p>
-                              <p className="text-xs opacity-60 mt-1">{new Date(notification.date).toLocaleString()}</p>
-                          </div>
-                      </div>
-                      <button 
-                          onClick={() => handleDismissNotification(notification.id)}
-                          className="text-gray-400 hover:text-gray-600 p-1"
-                      >
-                          <i className="fas fa-times"></i>
-                      </button>
-                  </div>
-              ))}
-          </div>
+        <div className="mb-8 space-y-4">
+          {user.notifications.map(notification => (
+            <div key={notification.id} className={`p-4 rounded-xl border flex items-start justify-between ${notification.type === 'warning' ? 'bg-red-50 border-red-100 text-red-800' :
+                notification.type === 'success' ? 'bg-green-50 border-green-100 text-green-800' :
+                  'bg-blue-50 border-blue-100 text-blue-800'
+              } animate-in slide-in-from-top-4`}>
+              <div className="flex items-start gap-3">
+                <i className={`fas ${notification.type === 'warning' ? 'fa-exclamation-circle' :
+                    notification.type === 'success' ? 'fa-check-circle' :
+                      'fa-info-circle'
+                  } mt-1`}></i>
+                <div>
+                  <h4 className="font-bold">{notification.title}</h4>
+                  <p className="text-sm opacity-90">{notification.message}</p>
+                  <p className="text-xs opacity-60 mt-1">{new Date(notification.date).toLocaleString()}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleDismissNotification(notification.id)}
+                className="text-gray-400 hover:text-gray-600 p-1"
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Active Subscription Banner for Customer */}
       {user.role === UserRole.CUSTOMER && (() => {
-          const activeSubscriber = getActiveSubscriber(user.id);
-          if (activeSubscriber && activeSubscriber.subscriptionEndDate) {
-              const endDate = new Date(activeSubscriber.subscriptionEndDate);
-              const now = new Date();
-              const daysLeft = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
-              
-              return (
-                  <div className="bg-gradient-to-r from-careem-dark to-green-900 rounded-3xl p-6 mb-8 shadow-xl relative overflow-hidden text-white border border-green-800">
-                      <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -mr-20 -mt-20 blur-3xl"></div>
-                      <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-                          <div className="flex items-center gap-6">
-                              <div className="w-20 h-20 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/20 shadow-inner shrink-0">
-                                  <i className="fas fa-user-shield text-3xl text-yellow-400"></i>
-                              </div>
-                              <div>
-                                  <div className="flex items-center gap-2 mb-1">
-                                      <span className="bg-yellow-400 text-careem-dark text-[10px] font-black uppercase px-2 py-0.5 rounded tracking-wider">PRO Подписка</span>
-                                      <span className="text-green-300 text-xs font-medium">Активна до {endDate.toLocaleDateString()}</span>
-                                  </div>
-                                  <h3 className="text-2xl font-bold mb-1">Ваш личный помощник: {activeSubscriber.name}</h3>
-                                  <p className="text-green-100 text-sm opacity-90">Вам помогает профессиональный ассистент. Осталось {daysLeft} дней.</p>
-                              </div>
-                          </div>
-                          
-                          <button 
-                              onClick={() => setIsCancelSubscriptionModalOpen(true)}
-                              className="bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold py-3 px-6 rounded-xl transition backdrop-blur-sm shrink-0 flex items-center gap-2"
-                          >
-                              <i className="fas fa-times-circle"></i> Отменить подписку
-                          </button>
-                      </div>
+        const activeSubscriber = getActiveSubscriber(user.id);
+        if (activeSubscriber && activeSubscriber.subscriptionEndDate) {
+          const endDate = new Date(activeSubscriber.subscriptionEndDate);
+          const now = new Date();
+          const daysLeft = Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
+
+          return (
+            <div className="bg-gradient-to-r from-careem-dark to-green-900 rounded-3xl p-6 mb-8 shadow-xl relative overflow-hidden text-white border border-green-800">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="flex items-center gap-6">
+                  <div className="w-20 h-20 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/20 shadow-inner shrink-0">
+                    <i className="fas fa-user-shield text-3xl text-yellow-400"></i>
                   </div>
-              );
-          }
-          return null;
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="bg-yellow-400 text-careem-dark text-[10px] font-black uppercase px-2 py-0.5 rounded tracking-wider">PRO Подписка</span>
+                      <span className="text-green-300 text-xs font-medium">Активна до {endDate.toLocaleDateString()}</span>
+                    </div>
+                    <h3 className="text-2xl font-bold mb-1">Ваш личный помощник: {activeSubscriber.name}</h3>
+                    <p className="text-green-100 text-sm opacity-90">Вам помогает профессиональный ассистент. Осталось {daysLeft} дней.</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setIsCancelSubscriptionModalOpen(true)}
+                  className="bg-white/10 hover:bg-white/20 text-white border border-white/20 font-bold py-3 px-6 rounded-xl transition backdrop-blur-sm shrink-0 flex items-center gap-2"
+                >
+                  <i className="fas fa-times-circle"></i> Отменить подписку
+                </button>
+              </div>
+            </div>
+          );
+        }
+        return null;
       })()}
 
       {/* Pending Subscription Requests for Customer */}
       {user.role === UserRole.CUSTOMER && (
-          (() => {
-             const pendingRequests = allUsers.filter(u => 
-                 u.role === UserRole.EXECUTOR && 
-                 u.subscriptionStatus === 'pending' && 
-                 u.subscriptionRequestToCustomerId === user.id
-             );
-             
-             if (pendingRequests.length === 0) return null;
+        (() => {
+          const pendingRequests = allUsers.filter(u =>
+            u.role === UserRole.EXECUTOR &&
+            u.subscriptionStatus === 'pending' &&
+            u.subscriptionRequestToCustomerId === user.id
+          );
 
-             return (
-                 <div className="mb-6 space-y-4">
-                     {pendingRequests.map(requester => (
-                         <div key={requester.id} className="bg-white p-4 rounded-2xl shadow-lg border border-yellow-200 flex items-center justify-between animate-in slide-in-from-top-4">
-                             <div className="flex items-center gap-4">
-                                 <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600">
-                                     <i className="fas fa-crown"></i>
-                                 </div>
-                                 <div>
-                                     <h4 className="font-bold text-gray-900">Запрос на подписку</h4>
-                                     <p className="text-sm text-gray-600">Помощник <strong>{requester.name}</strong> хочет оформить подписку.</p>
-                                 </div>
-                             </div>
-                             <button 
-                                 onClick={() => handleConfirmSubscription(requester.id)}
-                                 className="bg-careem-primary text-white font-bold py-2 px-6 rounded-xl hover:bg-green-700 transition shadow-md"
-                             >
-                                 Подтвердить
-                             </button>
-                         </div>
-                     ))}
-                 </div>
-             );
-          })()
+          if (pendingRequests.length === 0) return null;
+
+          return (
+            <div className="mb-6 space-y-4">
+              {pendingRequests.map(requester => (
+                <div key={requester.id} className="bg-white p-4 rounded-2xl shadow-lg border border-yellow-200 flex items-center justify-between animate-in slide-in-from-top-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600">
+                      <i className="fas fa-crown"></i>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-900">Запрос на подписку</h4>
+                      <p className="text-sm text-gray-600">Помощник <strong>{requester.name}</strong> хочет оформить подписку.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleConfirmSubscription(requester.id)}
+                    className="bg-careem-primary text-white font-bold py-2 px-6 rounded-xl hover:bg-green-700 transition shadow-md"
+                  >
+                    Подтвердить
+                  </button>
+                </div>
+              ))}
+            </div>
+          );
+        })()
       )}
 
       <div className="flex flex-col lg:flex-row gap-8">
-        
+
         {/* Sidebar */}
         <div className="w-full lg:w-64 shrink-0">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
@@ -712,9 +710,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 {user.role === UserRole.CUSTOMER ? 'Заказчик' : 'Помощник'}
               </p>
             </div>
-            
+
             <nav className="space-y-1">
-              <button 
+              <button
                 onClick={() => handleTabChange('orders')}
                 className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition relative ${activeTab === 'orders' && !showOpenOrders ? 'bg-careem-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
               >
@@ -726,29 +724,28 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   </span>
                 )}
               </button>
-              <button 
+              <button
                 onClick={() => handleTabChange('profile')}
                 className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition ${activeTab === 'profile' ? 'bg-careem-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
               >
                 <i className="fas fa-user-circle mr-3"></i> Профиль
               </button>
               {user.role === UserRole.EXECUTOR && (
-                <button 
+                <button
                   onClick={() => user.subscriptionStatus !== 'active' && handleTabChange('subscription')}
                   disabled={user.subscriptionStatus === 'active'}
-                  className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition ${
-                    activeTab === 'subscription' 
-                      ? 'bg-careem-primary text-white' 
+                  className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition ${activeTab === 'subscription'
+                      ? 'bg-careem-primary text-white'
                       : user.subscriptionStatus === 'active'
                         ? 'text-gray-400 cursor-not-allowed opacity-50'
                         : 'text-gray-600 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <i className="fas fa-rocket mr-3"></i> Продвижение
                 </button>
               )}
 
-              <button 
+              <button
                 onClick={() => setIsDeleteModalOpen(true)}
                 className="w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 transition mt-2"
               >
@@ -760,34 +757,34 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
           <div className="bg-gradient-to-br from-careem-dark to-[#003822] p-6 rounded-2xl text-white shadow-xl overflow-hidden relative group border border-careem-dark/50">
             <div className="relative z-10">
               <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-sm border border-white/10 shadow-inner">
-                      <i className="fab fa-telegram text-2xl text-white"></i>
-                  </div>
-                  <div>
-                      <h4 className="font-bold text-lg leading-tight">Telegram Бот</h4>
-                      <p className="text-[10px] text-green-200 font-medium uppercase tracking-wider opacity-80">Уведомления 24/7</p>
-                  </div>
+                <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-sm border border-white/10 shadow-inner">
+                  <i className="fab fa-telegram text-2xl text-white"></i>
+                </div>
+                <div>
+                  <h4 className="font-bold text-lg leading-tight">Telegram Бот</h4>
+                  <p className="text-[10px] text-green-200 font-medium uppercase tracking-wider opacity-80">Уведомления 24/7</p>
+                </div>
               </div>
-              
+
               {user.subscriptionStatus === 'active' ? (
                 <>
                   <p className="text-sm text-green-50 mb-6 leading-relaxed opacity-90 font-light">
-                      Для обсуждения и передачи данных вы можете связаться через телеграмм.
+                    Для обсуждения и передачи данных вы можете связаться через телеграмм.
                   </p>
-                  
-                  <button 
+
+                  <button
                     onClick={() => {
-                        const counterpart = user.role === UserRole.EXECUTOR 
-                            ? allUsers.find(u => u.id === user.subscribedToCustomerId)
-                            : allUsers.find(u => u.id === user.subscribedExecutorId);
-                        
-                        if (counterpart?.telegramId) {
-                            window.open(`https://t.me/${counterpart.telegramId.replace('@', '')}`, '_blank');
-                        } else if (counterpart?.phone) {
-                             window.open(`https://t.me/+${counterpart.phone.replace(/[^0-9]/g, '')}`, '_blank');
-                        } else {
-                            window.open('https://t.me/', '_blank');
-                        }
+                      const counterpart = user.role === UserRole.EXECUTOR
+                        ? allUsers.find(u => u.id === user.subscribedToCustomerId)
+                        : allUsers.find(u => u.id === user.subscribedExecutorId);
+
+                      if (counterpart?.telegramId) {
+                        window.open(`https://t.me/${counterpart.telegramId.replace('@', '')}`, '_blank');
+                      } else if (counterpart?.phone) {
+                        window.open(`https://t.me/+${counterpart.phone.replace(/[^0-9]/g, '')}`, '_blank');
+                      } else {
+                        window.open('https://t.me/', '_blank');
+                      }
                     }}
                     className="w-full bg-white text-careem-dark text-sm font-bold py-3.5 rounded-xl transition-all transform hover:scale-[1.02] hover:shadow-lg hover:bg-green-50 flex items-center justify-center gap-2 group-hover:gap-3"
                   >
@@ -798,9 +795,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
               ) : (
                 <>
                   <p className="text-sm text-green-50 mb-6 leading-relaxed opacity-90 font-light">
-                      Получайте мгновенные уведомления о новых заказах и изменениях статуса прямо в мессенджер.
+                    Получайте мгновенные уведомления о новых заказах и изменениях статуса прямо в мессенджер.
                   </p>
-                  
+
                   <button className="w-full bg-white text-careem-dark text-sm font-bold py-3.5 rounded-xl transition-all transform hover:scale-[1.02] hover:shadow-lg hover:bg-green-50 flex items-center justify-center gap-2 group-hover:gap-3">
                     <i className="fab fa-telegram text-lg"></i>
                     <span>{user.telegramId ? 'Настройки бота' : 'Подключить сейчас'}</span>
@@ -808,7 +805,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 </>
               )}
             </div>
-            
+
             {/* Decorative background effects */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-green-400/20 rounded-full blur-3xl -mr-10 -mt-10"></div>
             <div className="absolute bottom-0 left-0 w-24 h-24 bg-careem-accent/10 rounded-full blur-2xl -ml-10 -mb-10"></div>
@@ -826,13 +823,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 </h2>
                 {!(user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'active') && (
                   <div className="flex gap-2">
-                     <button className="px-3 py-1.5 bg-white border rounded-lg text-xs font-medium hover:bg-gray-50">Фильтры</button>
+                    <button className="px-3 py-1.5 bg-white border rounded-lg text-xs font-medium hover:bg-gray-50">Фильтры</button>
                   </div>
                 )}
               </div>
 
               {user.role === UserRole.EXECUTOR && user.subscriptionStatus !== 'active' && openOrders.length > 0 && !showOpenOrders && (
-                <div 
+                <div
                   onClick={() => setShowOpenOrders(true)}
                   className="bg-careem-light border border-green-100 p-4 rounded-xl flex items-center justify-between cursor-pointer hover:bg-green-100 transition"
                 >
@@ -852,7 +849,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
               )}
 
               {user.role === UserRole.EXECUTOR && user.subscriptionStatus !== 'active' && showOpenOrders && (
-                <button 
+                <button
                   onClick={() => setShowOpenOrders(false)}
                   className="mb-4 text-sm text-gray-500 hover:text-gray-900 flex items-center gap-2"
                 >
@@ -861,58 +858,58 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
               )}
 
               {user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'active' && user.subscriptionEndDate ? (
-                  (() => {
-                      const endDate = new Date(user.subscriptionEndDate);
-                      const now = new Date();
-                      const diffTime = Math.abs(endDate.getTime() - now.getTime());
-                      const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                      
-                      return (
-                        <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 w-full text-center relative overflow-hidden animate-in slide-in-from-bottom-4">
-                             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-yellow-400 to-yellow-600"></div>
-                             
-                             <div className="w-24 h-24 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
-                                 <i className="fas fa-crown text-4xl text-yellow-500"></i>
-                             </div>
-                             
-                             <h2 className="text-2xl font-black text-gray-900 mb-2">Подписка активна</h2>
-                             <p className="text-gray-500 mb-8">Вы успешно подписаны на заказчика. Доступ к общей ленте заказов ограничен.</p>
-                             
-                             <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 mb-8 max-w-md mx-auto">
-                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Истекает через</p>
-                                 <div className="text-4xl font-black text-careem-primary mb-1">
-                                     {daysLeft} <span className="text-lg text-gray-400 font-medium">дней</span>
-                                 </div>
-                                 <p className="text-xs text-gray-400">Дата окончания: {endDate.toLocaleDateString()}</p>
-                             </div>
+                (() => {
+                  const endDate = new Date(user.subscriptionEndDate);
+                  const now = new Date();
+                  const diffTime = Math.abs(endDate.getTime() - now.getTime());
+                  const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                             <div className="max-w-md mx-auto mb-6">
-                                <button 
-                                    onClick={() => setIsCancelSubscriptionModalOpen(true)}
-                                    className="w-full bg-white border-2 border-red-100 text-red-500 font-bold py-3 rounded-xl hover:bg-red-50 transition flex items-center justify-center gap-2"
-                                >
-                                    <i className="fas fa-times-circle"></i>
-                                    Отменить подписку
-                                </button>
-                             </div>
-            
-                             {daysLeft <= 1 && (
-                                 <div className="animate-in fade-in slide-in-from-bottom-4 max-w-md mx-auto">
-                                     <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-bold mb-4 border border-red-100">
-                                         <i className="fas fa-exclamation-circle mr-2"></i>
-                                         Подписка скоро истекает!
-                                     </div>
-                                     <button 
-                                         onClick={handleRenewSubscription}
-                                         className="w-full bg-careem-primary text-white font-bold py-3 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200"
-                                     >
-                                         Сделать новый запрос заказчику
-                                     </button>
-                                 </div>
-                             )}
+                  return (
+                    <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 w-full text-center relative overflow-hidden animate-in slide-in-from-bottom-4">
+                      <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-yellow-400 to-yellow-600"></div>
+
+                      <div className="w-24 h-24 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+                        <i className="fas fa-crown text-4xl text-yellow-500"></i>
+                      </div>
+
+                      <h2 className="text-2xl font-black text-gray-900 mb-2">Подписка активна</h2>
+                      <p className="text-gray-500 mb-8">Вы успешно подписаны на заказчика. Доступ к общей ленте заказов ограничен.</p>
+
+                      <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 mb-8 max-w-md mx-auto">
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Истекает через</p>
+                        <div className="text-4xl font-black text-careem-primary mb-1">
+                          {daysLeft} <span className="text-lg text-gray-400 font-medium">дней</span>
                         </div>
-                      );
-                  })()
+                        <p className="text-xs text-gray-400">Дата окончания: {endDate.toLocaleDateString()}</p>
+                      </div>
+
+                      <div className="max-w-md mx-auto mb-6">
+                        <button
+                          onClick={() => setIsCancelSubscriptionModalOpen(true)}
+                          className="w-full bg-white border-2 border-red-100 text-red-500 font-bold py-3 rounded-xl hover:bg-red-50 transition flex items-center justify-center gap-2"
+                        >
+                          <i className="fas fa-times-circle"></i>
+                          Отменить подписку
+                        </button>
+                      </div>
+
+                      {daysLeft <= 1 && (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 max-w-md mx-auto">
+                          <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-bold mb-4 border border-red-100">
+                            <i className="fas fa-exclamation-circle mr-2"></i>
+                            Подписка скоро истекает!
+                          </div>
+                          <button
+                            onClick={handleRenewSubscription}
+                            className="w-full bg-careem-primary text-white font-bold py-3 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200"
+                          >
+                            Сделать новый запрос заказчику
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
               ) : user.role === UserRole.CUSTOMER && user.subscriptionStatus === 'active' ? (
                 <div className="bg-white p-12 rounded-2xl border border-green-100 text-center shadow-sm">
                   <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -928,128 +925,127 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                     <div key={order.id} className={`${user.role === UserRole.EXECUTOR && order.executorId === user.id ? 'bg-green-50/30 border-green-200' : 'bg-white border-gray-100'} p-0 rounded-3xl shadow-sm border overflow-hidden hover:shadow-md transition-shadow duration-300`}>
                       {/* Inner Card Container with Inner Shadow */}
                       <div className="m-2 p-5 rounded-2xl bg-white shadow-[inset_0_2px_6px_rgba(0,0,0,0.06)] border border-gray-50/50">
-                          
-                          {/* Header: Icon + Type + Date */}
-                          <div className="flex justify-between items-start mb-6">
-                              <div className="flex items-center gap-4">
-                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${user.role === UserRole.EXECUTOR && order.executorId === user.id ? 'bg-green-100 text-careem-dark' : 'bg-careem-light text-careem-primary'}`}>
-                                  <i className="fas fa-hand-holding-heart text-2xl"></i>
-                                </div>
-                                <div>
-                                  <h4 className="font-extrabold text-gray-900 text-lg leading-tight">{order.serviceType}</h4>
-                                  <p className="text-xs font-medium text-gray-400 mt-1 flex items-center gap-2">
-                                    <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-500">{order.date}</span>
-                                    <span>{order.time}</span>
-                                  </p>
-                                </div>
-                              </div>
-                              <span className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm ${getStatusColor(order.status)}`}>
-                                {getStatusLabel(order.status)}
-                              </span>
+
+                        {/* Header: Icon + Type + Date */}
+                        <div className="flex justify-between items-start mb-6">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${user.role === UserRole.EXECUTOR && order.executorId === user.id ? 'bg-green-100 text-careem-dark' : 'bg-careem-light text-careem-primary'}`}>
+                              <i className="fas fa-hand-holding-heart text-2xl"></i>
+                            </div>
+                            <div>
+                              <h4 className="font-extrabold text-gray-900 text-lg leading-tight">{order.serviceType}</h4>
+                              <p className="text-xs font-medium text-gray-400 mt-1 flex items-center gap-2">
+                                <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-500">{order.date}</span>
+                                <span>{order.time}</span>
+                              </p>
+                            </div>
                           </div>
+                          <span className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm ${getStatusColor(order.status)}`}>
+                            {getStatusLabel(order.status)}
+                          </span>
+                        </div>
 
-                          {/* Body: Price & Info */}
-                          <div className="flex items-center justify-between bg-gray-50/50 rounded-xl p-4 border border-gray-100 mb-6">
-                              <div>
-                                <p className="text-[10px] uppercase text-gray-400 font-bold mb-1 tracking-wider">Стоимость услуги</p>
-                                <p className="text-2xl font-black text-gray-900">{order.totalPrice} <span className="text-sm font-medium text-gray-400">₽</span></p>
-                              </div>
-                              <div className="h-8 w-px bg-gray-200 mx-4"></div>
-                              <div className="text-right">
-                                  <button 
-                                      onClick={() => setSelectedOrderDetails(order)}
-                                      className="text-xs font-bold text-careem-primary hover:text-careem-dark transition flex items-center gap-1 group"
-                                  >
-                                      Подробнее <i className="fas fa-arrow-right transform group-hover:translate-x-1 transition-transform"></i>
-                                  </button>
-                              </div>
+                        {/* Body: Price & Info */}
+                        <div className="flex items-center justify-between bg-gray-50/50 rounded-xl p-4 border border-gray-100 mb-6">
+                          <div>
+                            <p className="text-[10px] uppercase text-gray-400 font-bold mb-1 tracking-wider">Стоимость услуги</p>
+                            <p className="text-2xl font-black text-gray-900">{order.totalPrice} <span className="text-sm font-medium text-gray-400">₽</span></p>
                           </div>
-
-                          {/* Actions Footer */}
-                          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100">
-                              {user.role === UserRole.EXECUTOR && order.status === OrderStatus.PENDING && (
-                                <>
-                                  <button onClick={() => handleUpdateOrderStatus(order.id, OrderStatus.CONFIRMED)} className="flex-1 bg-green-600 text-white py-2.5 rounded-xl hover:bg-green-700 transition font-bold text-sm shadow-sm shadow-green-200" title="Подтвердить">
-                                    <i className="fas fa-check mr-2"></i> Принять
-                                  </button>
-                                  <button onClick={() => setRejectingOrderId(order.id)} className="flex-1 bg-white text-red-500 border border-red-100 py-2.5 rounded-xl hover:bg-red-50 transition font-bold text-sm" title="Отклонить">
-                                    <i className="fas fa-times mr-2"></i> Отклонить
-                                  </button>
-                                </>
-                              )}
-
-                              {user.role === UserRole.EXECUTOR && order.status === OrderStatus.OPEN && (
-                                <button 
-                                  onClick={() => handleRespondToOrder(order.id)} 
-                                  disabled={order.responses?.includes(user.id)}
-                                  className={`flex-1 py-3 rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center gap-2 ${
-                                    order.responses?.includes(user.id)
-                                      ? 'bg-green-50 text-green-700 cursor-default border border-green-100'
-                                      : 'bg-careem-primary text-white hover:bg-careem-dark shadow-green-200'
-                                  }`}
-                                >
-                                  {order.responses?.includes(user.id) ? <><i className="fas fa-check-circle"></i> Вы откликнулись</> : 'Откликнуться на заказ'}
-                                </button>
-                              )}
-
-                              {user.role === UserRole.CUSTOMER && order.status === OrderStatus.PENDING && (
-                                <button onClick={() => handleUpdateOrderStatus(order.id, OrderStatus.CANCELLED)} className="w-full bg-red-50 text-red-600 border border-red-100 py-2.5 rounded-xl hover:bg-red-100 transition font-bold text-sm flex items-center justify-center gap-2" title="Отменить">
-                                  <i className="fas fa-times"></i> Отменить поиск
-                                </button>
-                              )}
-
-                              {user.role === UserRole.CUSTOMER && order.status === OrderStatus.CONFIRMED && (
-                                <button 
-                                  onClick={() => setCompletingOrderId(order.id)} 
-                                  className="w-full bg-green-600 text-white py-3 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200 font-bold text-sm flex items-center justify-center gap-2"
-                                >
-                                  <i className="fas fa-check-circle"></i> Подтвердить выполнение
-                                </button>
-                              )}
-                              
-                              {/* Delete Button (Trash Icon) for Customer */}
-                              {user.role === UserRole.CUSTOMER && (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REJECTED || order.status === OrderStatus.COMPLETED) && (
-                                <button 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if(window.confirm('Вы уверены, что хотите удалить этот заказ из истории?')) {
-                                      handleDeleteOrder(order.id);
-                                    }
-                                  }}
-                                  className="ml-auto w-10 h-10 flex items-center justify-center bg-gray-50 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition border border-gray-100"
-                                  title="Удалить заказ"
-                                >
-                                  <i className="fas fa-trash-alt"></i>
-                                </button>
-                              )}
+                          <div className="h-8 w-px bg-gray-200 mx-4"></div>
+                          <div className="text-right">
+                            <button
+                              onClick={() => setSelectedOrderDetails(order)}
+                              className="text-xs font-bold text-careem-primary hover:text-careem-dark transition flex items-center gap-1 group"
+                            >
+                              Подробнее <i className="fas fa-arrow-right transform group-hover:translate-x-1 transition-transform"></i>
+                            </button>
                           </div>
-                      
-                      {/* Expanded Content Area (Address, Audio, etc.) */}
-                      <div className="space-y-4 mt-2">
+                        </div>
+
+                        {/* Actions Footer */}
+                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100">
+                          {user.role === UserRole.EXECUTOR && order.status === OrderStatus.PENDING && (
+                            <>
+                              <button onClick={() => handleUpdateOrderStatus(order.id, OrderStatus.CONFIRMED)} className="flex-1 bg-green-600 text-white py-2.5 rounded-xl hover:bg-green-700 transition font-bold text-sm shadow-sm shadow-green-200" title="Подтвердить">
+                                <i className="fas fa-check mr-2"></i> Принять
+                              </button>
+                              <button onClick={() => setRejectingOrderId(order.id)} className="flex-1 bg-white text-red-500 border border-red-100 py-2.5 rounded-xl hover:bg-red-50 transition font-bold text-sm" title="Отклонить">
+                                <i className="fas fa-times mr-2"></i> Отклонить
+                              </button>
+                            </>
+                          )}
+
+                          {user.role === UserRole.EXECUTOR && order.status === OrderStatus.OPEN && (
+                            <button
+                              onClick={() => handleRespondToOrder(order.id)}
+                              disabled={order.responses?.includes(user.id)}
+                              className={`flex-1 py-3 rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center gap-2 ${order.responses?.includes(user.id)
+                                  ? 'bg-green-50 text-green-700 cursor-default border border-green-100'
+                                  : 'bg-careem-primary text-white hover:bg-careem-dark shadow-green-200'
+                                }`}
+                            >
+                              {order.responses?.includes(user.id) ? <><i className="fas fa-check-circle"></i> Вы откликнулись</> : 'Откликнуться на заказ'}
+                            </button>
+                          )}
+
+                          {user.role === UserRole.CUSTOMER && order.status === OrderStatus.PENDING && (
+                            <button onClick={() => handleUpdateOrderStatus(order.id, OrderStatus.CANCELLED)} className="w-full bg-red-50 text-red-600 border border-red-100 py-2.5 rounded-xl hover:bg-red-100 transition font-bold text-sm flex items-center justify-center gap-2" title="Отменить">
+                              <i className="fas fa-times"></i> Отменить поиск
+                            </button>
+                          )}
+
+                          {user.role === UserRole.CUSTOMER && order.status === OrderStatus.CONFIRMED && (
+                            <button
+                              onClick={() => setCompletingOrderId(order.id)}
+                              className="w-full bg-green-600 text-white py-3 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200 font-bold text-sm flex items-center justify-center gap-2"
+                            >
+                              <i className="fas fa-check-circle"></i> Подтвердить выполнение
+                            </button>
+                          )}
+
+                          {/* Delete Button (Trash Icon) for Customer */}
+                          {user.role === UserRole.CUSTOMER && (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REJECTED || order.status === OrderStatus.COMPLETED) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm('Вы уверены, что хотите удалить этот заказ из истории?')) {
+                                  handleDeleteOrder(order.id);
+                                }
+                              }}
+                              className="ml-auto w-10 h-10 flex items-center justify-center bg-gray-50 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition border border-gray-100"
+                              title="Удалить заказ"
+                            >
+                              <i className="fas fa-trash-alt"></i>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Expanded Content Area (Address, Audio, etc.) */}
+                        <div className="space-y-4 mt-2">
                           {/* Address for Open Orders Only (City Only) */}
                           {(showOpenOrders || user.role === UserRole.CUSTOMER) && (
                             <div className="w-full mt-2 p-3 bg-gray-50/50 rounded-xl border border-gray-100/50 flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-careem-primary shadow-sm border border-gray-100">
-                                    <i className="fas fa-map-marker-alt text-xs"></i>
-                                  </div>
-                                  <span className="font-medium text-gray-600 text-sm line-clamp-1">
-                                    {order.locationFrom 
-                                       ? formatAddress(order.locationFrom.address).split(',')[0]
-                                       : order.generalLocation 
-                                         ? formatAddress(order.generalLocation.address).split(',')[0]
-                                         : 'Город не указан'}
-                                  </span>
+                              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-careem-primary shadow-sm border border-gray-100">
+                                <i className="fas fa-map-marker-alt text-xs"></i>
+                              </div>
+                              <span className="font-medium text-gray-600 text-sm line-clamp-1">
+                                {order.locationFrom
+                                  ? formatAddress(order.locationFrom.address).split(',')[0]
+                                  : order.generalLocation
+                                    ? formatAddress(order.generalLocation.address).split(',')[0]
+                                    : 'Город не указан'}
+                              </span>
                             </div>
                           )}
 
                           {order.status === OrderStatus.REJECTED && order.rejectionReason && (
-                             <div className="mt-2 w-full">
-                               <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-800">
-                                 <strong>Причина отказа:</strong> {order.rejectionReason}
-                               </div>
-                             </div>
+                            <div className="mt-2 w-full">
+                              <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-800">
+                                <strong>Причина отказа:</strong> {order.rejectionReason}
+                              </div>
+                            </div>
                           )}
-                          
+
                           {/* Voice Message Player */}
                           {order.voiceMessageUrl && (
                             <div className="w-full mt-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
@@ -1067,33 +1063,33 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                               const customer = allUsers.find(u => u.id === order.customerId);
                               if (!customer) return null;
                               return (
-                              <div 
-                                onClick={() => setViewingCustomer(customer)}
-                                className="w-full mt-4 p-4 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-green-50 hover:border-green-100 transition group"
-                              >
-                                <div className="flex items-center gap-4">
-                                  <div className="shrink-0">
-                                    <img 
-                                      src={customer.avatar || `https://ui-avatars.com/api/?name=${customer.name}`} 
-                                      alt={customer.name} 
-                                      className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm" 
-                                    />
-                                  </div>
-                                  <div className="flex-grow">
-                                    <h5 className="font-bold text-gray-900 text-sm">Заказчик</h5>
-                                    <h4 className="font-bold text-gray-900 text-base group-hover:text-careem-primary transition">{customer.name}</h4>
-                                    {customer.phone && (
-                                      <span className="text-xs text-careem-primary font-medium mt-1 inline-block">
-                                        Нажмите, чтобы увидеть профиль
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-gray-400 group-hover:text-careem-primary shadow-sm transition">
-                                    <i className="fas fa-chevron-right"></i>
+                                <div
+                                  onClick={() => setViewingCustomer(customer)}
+                                  className="w-full mt-4 p-4 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-green-50 hover:border-green-100 transition group"
+                                >
+                                  <div className="flex items-center gap-4">
+                                    <div className="shrink-0">
+                                      <img
+                                        src={customer.avatar || `https://ui-avatars.com/api/?name=${customer.name}`}
+                                        alt={customer.name}
+                                        className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm"
+                                      />
+                                    </div>
+                                    <div className="flex-grow">
+                                      <h5 className="font-bold text-gray-900 text-sm">Заказчик</h5>
+                                      <h4 className="font-bold text-gray-900 text-base group-hover:text-careem-primary transition">{customer.name}</h4>
+                                      {customer.phone && (
+                                        <span className="text-xs text-careem-primary font-medium mt-1 inline-block">
+                                          Нажмите, чтобы увидеть профиль
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-gray-400 group-hover:text-careem-primary shadow-sm transition">
+                                      <i className="fas fa-chevron-right"></i>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            );
+                              );
                             })()
                           )}
 
@@ -1106,19 +1102,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                 <div className="w-full mt-4 p-4 bg-careem-light rounded-xl border border-green-100 animate-in fade-in duration-500">
                                   <div className="flex items-center justify-between mb-3">
                                     <h5 className="font-bold text-sm text-careem-dark">Исполнитель назначен</h5>
-                                    <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
-                                      order.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-700' : 'bg-green-100 text-green-700'
-                                    }`}>
+                                    <span className={`px-2 py-1 rounded-lg text-xs font-bold ${order.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-700' : 'bg-green-100 text-green-700'
+                                      }`}>
                                       {getStatusLabel(order.status)}
                                     </span>
                                   </div>
-                                  
+
                                   <div className="flex flex-col sm:flex-row gap-4">
                                     <div className="shrink-0 relative">
-                                      <img 
-                                        src={executor.avatar || `https://ui-avatars.com/api/?name=${executor.name}`} 
-                                        alt={executor.name} 
-                                        className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-md max-w-full" 
+                                      <img
+                                        src={executor.avatar || `https://ui-avatars.com/api/?name=${executor.name}`}
+                                        alt={executor.name}
+                                        className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-md max-w-full"
                                       />
                                       {executor.rating && (
                                         <div className="absolute -bottom-2 -right-2 bg-white px-1.5 py-0.5 rounded-lg shadow-sm border border-gray-100 flex items-center gap-1">
@@ -1127,14 +1122,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                         </div>
                                       )}
                                     </div>
-                                    
+
                                     <div className="flex-grow">
                                       <h4 className="font-bold text-gray-900 text-lg leading-tight mb-1">{executor.name}</h4>
-                                      
+
                                       {executor.description && (
                                         <p className="text-xs text-gray-500 mb-2 line-clamp-2">{executor.description}</p>
                                       )}
-                                      
+
                                       <div className="flex flex-wrap gap-2 mt-2">
                                         {executor.phone && (
                                           <a href={`tel:${executor.phone}`} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:text-careem-primary hover:border-green-300 transition">
@@ -1150,9 +1145,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                     </div>
 
                                     {executor.vehiclePhoto && order.serviceType === 'Транспортировка на авто' && (
-                                       <div className="shrink-0">
-                                          <img src={executor.vehiclePhoto} alt="Транспорт" className="w-20 h-16 object-cover rounded-lg border border-gray-200 max-w-full" />
-                                       </div>
+                                      <div className="shrink-0">
+                                        <img src={executor.vehiclePhoto} alt="Транспорт" className="w-20 h-16 object-cover rounded-lg border border-gray-200 max-w-full" />
+                                      </div>
                                     )}
                                   </div>
                                 </div>
@@ -1170,7 +1165,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                   if (!responder) return null;
                                   // Hide responder if they are subscribed to someone else
                                   if (responder.subscriptionStatus === 'active' && responder.subscribedToCustomerId !== user.id) return null;
-                                  
+
                                   return (
                                     <div key={responderId} className="flex items-center justify-between p-3 bg-careem-light rounded-xl border border-green-100">
                                       <div className="flex items-center gap-3">
@@ -1180,7 +1175,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                           <p className="text-xs text-careem-primary font-bold">★ {responder.rating}</p>
                                         </div>
                                       </div>
-                                      <button 
+                                      <button
                                         onClick={() => handleSelectExecutor(order.id, responderId)}
                                         className="bg-careem-primary text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-green-700 transition"
                                       >
@@ -1194,17 +1189,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                           )}
                         </div>
 
-                      {/* Order Details */}
-                      {order.details && (
-                        <div className="mt-4 pt-4 border-t border-gray-100">
-                          <h5 className="text-xs font-bold text-gray-400 uppercase mb-2">Детали заказа</h5>
-                          <p className="text-sm text-gray-700">{order.details}</p>
-                        </div>
-                      )}
+                        {/* Order Details */}
+                        {order.details && (
+                          <div className="mt-4 pt-4 border-t border-gray-100">
+                            <h5 className="text-xs font-bold text-gray-400 uppercase mb-2">Детали заказа</h5>
+                            <p className="text-sm text-gray-700">{order.details}</p>
+                          </div>
+                        )}
 
-                      {/* Address Information - Moved to Details Modal */}
-                      
-{/* Order Map Visualization Removed */}
+                        {/* Address Information - Moved to Details Modal */}
+
+                        {/* Order Map Visualization Removed */}
                       </div>
                     </div>
                   ))}
@@ -1216,7 +1211,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                       <div className="space-y-3">
                         {completedOrders.map(order => (
                           <div key={order.id} className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
-                            <div 
+                            <div
                               onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
                               className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition"
                             >
@@ -1233,10 +1228,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                 <span className="text-sm font-bold text-gray-600">{order.totalPrice} ₽</span>
                                 <span className="bg-gray-200 text-gray-600 px-2 py-1 rounded text-xs font-bold">{getStatusLabel(order.status)}</span>
                                 {user.role === UserRole.CUSTOMER && (
-                                  <button 
+                                  <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      if(window.confirm('Вы уверены, что хотите удалить этот заказ из истории?')) {
+                                      if (window.confirm('Вы уверены, что хотите удалить этот заказ из истории?')) {
                                         handleDeleteOrder(order.id);
                                       }
                                     }}
@@ -1249,7 +1244,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                 <i className={`fas fa-chevron-down text-gray-400 transition-transform ${expandedOrderId === order.id ? 'rotate-180' : ''}`}></i>
                               </div>
                             </div>
-                            
+
                             {expandedOrderId === order.id && (
                               <div className="p-4 pt-0 border-t border-gray-200 bg-white">
                                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1336,14 +1331,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                     <h3 className="text-xl font-bold text-gray-900">Детали заказа</h3>
                     <p className="text-sm text-gray-500 mt-1">{selectedOrderDetails.serviceType}</p>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setSelectedOrderDetails(null)}
                     className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition shadow-sm"
                   >
                     <i className="fas fa-times"></i>
                   </button>
                 </div>
-                
+
                 <div className="p-6 overflow-y-auto custom-scrollbar">
                   {/* Status & Price */}
                   <div className="flex items-center justify-between mb-6 bg-careem-light p-4 rounded-xl border border-green-100">
@@ -1406,7 +1401,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                             <p className="text-sm text-gray-800 font-medium">{formatAddress(selectedOrderDetails.locationTo.address)}</p>
                           </div>
                         </div>
-                        
+
                         {/* Map */}
                         <OrderMap order={selectedOrderDetails} />
                       </div>
@@ -1428,7 +1423,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 </div>
 
                 <div className="p-6 border-t border-gray-100 bg-gray-50">
-                  <button 
+                  <button
                     onClick={() => setSelectedOrderDetails(null)}
                     className="w-full bg-careem-primary text-white font-bold py-3 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-100"
                   >
@@ -1452,7 +1447,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   autoFocus
                 ></textarea>
                 <div className="flex justify-end gap-3">
-                  <button 
+                  <button
                     onClick={() => {
                       setRejectingOrderId(null);
                       setRejectionReason('');
@@ -1461,7 +1456,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   >
                     Отмена
                   </button>
-                  <button 
+                  <button
                     onClick={handleRejectOrder}
                     disabled={!rejectionReason.trim()}
                     className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1488,7 +1483,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 <div className="mb-6">
                   <div className="flex justify-center gap-2 mb-4">
                     {[1, 2, 3, 4, 5].map(star => (
-                      <button 
+                      <button
                         key={star}
                         type="button"
                         onClick={() => setReviewRating(star)}
@@ -1498,7 +1493,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                       </button>
                     ))}
                   </div>
-                  
+
                   <textarea
                     className="w-full bg-gray-50 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-green-500 min-h-[100px] resize-none text-sm"
                     placeholder="Напишите пару слов о работе специалиста..."
@@ -1508,7 +1503,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 </div>
 
                 <div className="flex justify-end gap-3">
-                  <button 
+                  <button
                     onClick={() => {
                       setCompletingOrderId(null);
                       setReviewRating(5);
@@ -1518,7 +1513,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   >
                     Позже
                   </button>
-                  <button 
+                  <button
                     onClick={handleCompleteOrder}
                     className="px-6 py-2 bg-careem-primary text-white font-bold rounded-lg hover:bg-green-700 transition shadow-lg shadow-green-200"
                   >
@@ -1533,7 +1528,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
           {viewingCustomer && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
               <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl scale-100 relative overflow-hidden">
-                <button 
+                <button
                   onClick={() => setViewingCustomer(null)}
                   className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition z-10"
                 >
@@ -1542,10 +1537,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
                 <div className="text-center mb-6 pt-4">
                   <div className="w-24 h-24 mx-auto rounded-full overflow-hidden border-4 border-green-50 mb-4 shadow-lg">
-                    <img 
-                      src={viewingCustomer.avatar || `https://ui-avatars.com/api/?name=${viewingCustomer.name}`} 
-                      alt={viewingCustomer.name} 
-                      className="w-full h-full object-cover" 
+                    <img
+                      src={viewingCustomer.avatar || `https://ui-avatars.com/api/?name=${viewingCustomer.name}`}
+                      alt={viewingCustomer.name}
+                      className="w-full h-full object-cover"
                     />
                   </div>
                   <h3 className="text-2xl font-bold text-gray-900">{viewingCustomer.name}</h3>
@@ -1590,40 +1585,40 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 </div>
 
                 {/* Actions for Executor viewing Customer */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {viewingCustomer.phone && (
-                      <a 
-                        href={`tel:${viewingCustomer.phone}`}
-                        className="col-span-2 flex items-center justify-center gap-2 py-3 bg-careem-primary text-white rounded-xl font-bold hover:bg-green-700 transition"
+                <div className="grid grid-cols-2 gap-3">
+                  {viewingCustomer.phone && (
+                    <a
+                      href={`tel:${viewingCustomer.phone}`}
+                      className="col-span-2 flex items-center justify-center gap-2 py-3 bg-careem-primary text-white rounded-xl font-bold hover:bg-green-700 transition"
+                    >
+                      <i className="fas fa-phone"></i> Позвонить
+                    </a>
+                  )}
+                  <button className="flex items-center justify-center gap-2 py-3 bg-careem-primary text-white rounded-xl font-bold hover:bg-careem-dark transition">
+                    <i className="fab fa-telegram"></i> Написать
+                  </button>
+
+                  {/* Subscription Button */}
+                  {(() => {
+                    const existingSubscriber = allUsers.find(u => u.subscribedToCustomerId === viewingCustomer.id && u.subscriptionStatus === 'active');
+                    const isSubscribedBySomeoneElse = existingSubscriber && existingSubscriber.id !== user.id;
+
+                    return (
+                      <button
+                        onClick={() => handleSubscribeRequest(viewingCustomer.id)}
+                        disabled={user.subscriptionStatus === 'pending' || user.subscriptionStatus === 'active' || !!isSubscribedBySomeoneElse}
+                        className="flex items-center justify-center gap-2 py-3 bg-yellow-400 text-gray-900 rounded-xl font-bold hover:bg-yellow-500 transition disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500"
+                        title={isSubscribedBySomeoneElse ? 'У пользователя уже есть активный помощник' : ''}
                       >
-                        <i className="fas fa-phone"></i> Позвонить
-                      </a>
-                    )}
-                    <button className="flex items-center justify-center gap-2 py-3 bg-careem-primary text-white rounded-xl font-bold hover:bg-careem-dark transition">
-                      <i className="fab fa-telegram"></i> Написать
-                    </button>
-                    
-                    {/* Subscription Button */}
-                    {(() => {
-                        const existingSubscriber = allUsers.find(u => u.subscribedToCustomerId === viewingCustomer.id && u.subscriptionStatus === 'active');
-                        const isSubscribedBySomeoneElse = existingSubscriber && existingSubscriber.id !== user.id;
-                        
-                        return (
-                            <button 
-                              onClick={() => handleSubscribeRequest(viewingCustomer.id)}
-                              disabled={user.subscriptionStatus === 'pending' || user.subscriptionStatus === 'active' || !!isSubscribedBySomeoneElse}
-                              className="flex items-center justify-center gap-2 py-3 bg-yellow-400 text-gray-900 rounded-xl font-bold hover:bg-yellow-500 transition disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500"
-                              title={isSubscribedBySomeoneElse ? 'У пользователя уже есть активный помощник' : ''}
-                            >
-                              <i className="fas fa-crown"></i> 
-                              {user.subscriptionStatus === 'pending' ? 'Запрос...' : 
-                               user.subscriptionStatus === 'active' ? 'Активна' : 
-                               isSubscribedBySomeoneElse ? 'Занят' :
-                               'Подписка'}
-                            </button>
-                        );
-                    })()}
-                  </div>
+                        <i className="fas fa-crown"></i>
+                        {user.subscriptionStatus === 'pending' ? 'Запрос...' :
+                          user.subscriptionStatus === 'active' ? 'Активна' :
+                            isSubscribedBySomeoneElse ? 'Занят' :
+                              'Подписка'}
+                      </button>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
           )}
@@ -1633,44 +1628,44 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
               <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl scale-100">
                 <div className="text-center mb-6">
-                    <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center text-red-500 mx-auto mb-4">
-                        <i className="fas fa-heart-broken text-2xl"></i>
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900">Отмена подписки</h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                        {user.role === UserRole.CUSTOMER 
-                            ? 'Вы уверены, что хотите отказаться от услуг помощника?' 
-                            : 'Вы уверены, что хотите отменить подписку на заказчика?'}
-                    </p>
+                  <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center text-red-500 mx-auto mb-4">
+                    <i className="fas fa-heart-broken text-2xl"></i>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900">Отмена подписки</h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {user.role === UserRole.CUSTOMER
+                      ? 'Вы уверены, что хотите отказаться от услуг помощника?'
+                      : 'Вы уверены, что хотите отменить подписку на заказчика?'}
+                  </p>
                 </div>
-                
+
                 <div className="mb-6">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Укажите причину отмены <span className="text-red-500">*</span></label>
-                    <textarea
-                        className="w-full bg-gray-50 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-red-500 min-h-[100px] resize-none text-sm"
-                        placeholder={user.role === UserRole.CUSTOMER ? "Например: помощник не выходит на связь..." : "Например: изменились обстоятельства..."}
-                        value={cancelSubscriptionReason}
-                        onChange={(e) => setCancelSubscriptionReason(e.target.value)}
-                    ></textarea>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Укажите причину отмены <span className="text-red-500">*</span></label>
+                  <textarea
+                    className="w-full bg-gray-50 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-red-500 min-h-[100px] resize-none text-sm"
+                    placeholder={user.role === UserRole.CUSTOMER ? "Например: помощник не выходит на связь..." : "Например: изменились обстоятельства..."}
+                    value={cancelSubscriptionReason}
+                    onChange={(e) => setCancelSubscriptionReason(e.target.value)}
+                  ></textarea>
                 </div>
 
                 <div className="flex justify-end gap-3">
-                    <button 
-                        onClick={() => {
-                            setIsCancelSubscriptionModalOpen(false);
-                            setCancelSubscriptionReason('');
-                        }}
-                        className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
-                    >
-                        Вернуться
-                    </button>
-                    <button 
-                        onClick={handleCancelSubscription}
-                        disabled={!cancelSubscriptionReason.trim()}
-                        className="px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition shadow-lg shadow-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Отменить подписку
-                    </button>
+                  <button
+                    onClick={() => {
+                      setIsCancelSubscriptionModalOpen(false);
+                      setCancelSubscriptionReason('');
+                    }}
+                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                  >
+                    Вернуться
+                  </button>
+                  <button
+                    onClick={handleCancelSubscription}
+                    disabled={!cancelSubscriptionReason.trim()}
+                    className="px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition shadow-lg shadow-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Отменить подписку
+                  </button>
                 </div>
               </div>
             </div>
@@ -1678,162 +1673,204 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
           {activeTab === 'subscription' && user.role === UserRole.EXECUTOR && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-               <div className="p-8 bg-careem-primary text-white">
-                  <h2 className="text-3xl font-bold mb-2">PRO Тариф</h2>
-                  <p className="text-green-50">Выделите свой профиль и получайте на 70% больше заказов.</p>
-               </div>
-               <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div>
-                    <h3 className="font-bold text-lg mb-4">Что вы получите:</h3>
-                    <ul className="space-y-4">
-                      <li className="flex items-center gap-3 text-sm text-gray-600">
-                        <i className="fas fa-check-circle text-careem-primary"></i>
-                        <span>Приоритетное отображение в поиске</span>
-                      </li>
-                      <li className="flex items-center gap-3 text-sm text-gray-600">
-                        <i className="fas fa-check-circle text-careem-primary"></i>
-                        <span>Золотая рамка и бейдж PRO</span>
-                      </li>
-                      <li className="flex items-center gap-3 text-sm text-gray-600">
-                        <i className="fas fa-check-circle text-careem-primary"></i>
-                        <span>Доступ к премиум-заказам</span>
-                      </li>
-                      <li className="flex items-center gap-3 text-sm text-gray-600">
-                        <i className="fas fa-check-circle text-careem-primary"></i>
-                        <span>Сниженная комиссия платформы</span>
-                      </li>
-                    </ul>
-                  </div>
-                  <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 flex flex-col justify-center">
-                    <p className="text-center text-gray-500 text-sm mb-2">Стоимость подписки</p>
-                    <p className="text-center text-4xl font-black text-gray-900 mb-6">490 ₽ <span className="text-sm font-normal text-gray-400">/ месяц</span></p>
-                    <button className="w-full bg-careem-primary text-white font-bold py-3 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200">
-                       Подключить сейчас
-                    </button>
-                  </div>
-               </div>
+              <div className="p-8 bg-careem-primary text-white">
+                <h2 className="text-3xl font-bold mb-2">PRO Тариф</h2>
+                <p className="text-green-50">Выделите свой профиль и получайте на 70% больше заказов.</p>
+              </div>
+              <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <h3 className="font-bold text-lg mb-4">Что вы получите:</h3>
+                  <ul className="space-y-4">
+                    <li className="flex items-center gap-3 text-sm text-gray-600">
+                      <i className="fas fa-check-circle text-careem-primary"></i>
+                      <span>Приоритетное отображение в поиске</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-sm text-gray-600">
+                      <i className="fas fa-check-circle text-careem-primary"></i>
+                      <span>Золотая рамка и бейдж PRO</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-sm text-gray-600">
+                      <i className="fas fa-check-circle text-careem-primary"></i>
+                      <span>Доступ к премиум-заказам</span>
+                    </li>
+                    <li className="flex items-center gap-3 text-sm text-gray-600">
+                      <i className="fas fa-check-circle text-careem-primary"></i>
+                      <span>Сниженная комиссия платформы</span>
+                    </li>
+                  </ul>
+                </div>
+                <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 flex flex-col justify-center">
+                  <p className="text-center text-gray-500 text-sm mb-2">Стоимость подписки</p>
+                  <p className="text-center text-4xl font-black text-gray-900 mb-6">490 ₽ <span className="text-sm font-normal text-gray-400">/ месяц</span></p>
+                  <button className="w-full bg-careem-primary text-white font-bold py-3 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200">
+                    Подключить сейчас
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === 'profile' && (
             <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
-               <h3 className="text-lg font-bold text-gray-900 mb-6">Редактирование профиля</h3>
-               <form className="space-y-6" onSubmit={(e) => {
-                 e.preventDefault();
-                 // @ts-ignore
-                 const name = e.target.name.value;
-                 // @ts-ignore
-                 const email = e.target.email.value;
-                 // @ts-ignore
-                 const description = e.target.description.value;
-                 
-                 const customServices = servicesState.filter(s => s.enabled).map(s => ({
-                    serviceId: s.serviceId,
-                    price: Number(s.price),
-                    enabled: true
-                 }));
+              <h3 className="text-lg font-bold text-gray-900 mb-6">Редактирование профиля</h3>
+              <form className="space-y-6" onSubmit={(e) => {
+                e.preventDefault();
+                // @ts-ignore
+                const name = e.target.name.value;
+                // @ts-ignore
+                const email = e.target.email.value;
+                // @ts-ignore
+                const description = e.target.description.value;
 
-                 const newUser = {
-                    ...user,
-                    name,
-                    email,
-                    description,
-                    customServices,
-                    locationCoordinates: locationCoords,
-                    coverageRadius: coverageRadius,
-                    avatar: avatarPreview,
-                    vehiclePhoto: vehiclePhotoPreview
-                 };
+                const customServices = servicesState.filter(s => s.enabled).map(s => ({
+                  serviceId: s.serviceId,
+                  price: Number(s.price),
+                  enabled: true
+                }));
 
-                 // Update localStorage
-                 const storedUsers = JSON.parse(localStorage.getItem('bez_barrierov_users') || '[]');
-                 const newUsers = storedUsers.map((u: User) => u.id === user.id ? newUser : u);
-                 localStorage.setItem('bez_barrierov_users', JSON.stringify(newUsers));
-                 localStorage.setItem('bez_barrierov_user', JSON.stringify(newUser));
-                 
-                 setHasUnsavedChanges(false);
-                 window.location.reload();
-               }}>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Полное имя</label>
-                      <input name="name" type="text" defaultValue={user.name} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-careem-primary outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Email</label>
-                      <input name="email" type="email" defaultValue={user.email} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-careem-primary outline-none" />
-                    </div>
-                 </div>
+                const newUser = {
+                  ...user,
+                  name,
+                  email,
+                  description,
+                  customServices,
+                  locationCoordinates: locationCoords,
+                  coverageRadius: coverageRadius,
+                  avatar: avatarPreview,
+                  vehiclePhoto: vehiclePhotoPreview
+                };
 
-                 {user.role === UserRole.EXECUTOR && (
-                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                        <label className="block text-xs font-bold text-gray-400 uppercase mb-4">
-                            Желаемое место работы и радиус охвата
-                        </label>
-                        {locationAddress && (
-                          <p className="text-sm text-gray-700 mb-3 font-medium bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
-                            <i className="fas fa-map-marker-alt text-red-500 mr-2"></i>
-                            {locationAddress}
-                          </p>
-                        )}
-                        <div className="h-64 rounded-xl overflow-hidden mb-4 border border-gray-300 relative z-0">
-                                <MapContainer
-                                    center={locationCoords ? [locationCoords.lat, locationCoords.lng] : [55.75, 37.61]}
-                                    zoom={10}
-                                    style={{ width: '100%', height: '100%' }}
-                                >
-                                    <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            keepBuffer={4}
-          />
-          <MapInvalidator />
-                                    
-                                    <DashboardMapEvents 
-                                        setLocationCoords={setLocationCoords}
-                                        setLocationAddress={setLocationAddress}
-                                        setHasUnsavedChanges={setHasUnsavedChanges}
-                                    />
+                // Update localStorage
+                const storedUsers = JSON.parse(localStorage.getItem('bez_barrierov_users') || '[]');
+                const newUsers = storedUsers.map((u: User) => u.id === user.id ? newUser : u);
+                localStorage.setItem('bez_barrierov_users', JSON.stringify(newUsers));
+                localStorage.setItem('bez_barrierov_user', JSON.stringify(newUser));
 
-                                    {locationCoords && (
-                                        <>
-                                            <Marker position={[locationCoords.lat, locationCoords.lng]} />
-                                            {coverageRadius && (
-                                                <Circle 
-                                                    center={[locationCoords.lat, locationCoords.lng]} 
-                                                    radius={coverageRadius * 1000} 
-                                                    pathOptions={{ fillColor: '#828282', color: '#828282', fillOpacity: 0.5, weight: 2 }}
-                                                />
-                                            )}
-                                        </>
-                                    )}
-                                </MapContainer>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Радиус (км): {coverageRadius}</label>
-                            <input 
-                                type="range" 
-                                min="1" 
-                                max="50" 
-                                value={coverageRadius} 
-                                onChange={(e) => {
-                                    setCoverageRadius(Number(e.target.value));
-                                    setHasUnsavedChanges(true);
-                                }}
-                                className="w-full"
-                            />
-                        </div>
-                        <p className="text-xs text-gray-500 mt-2">Кликните на карту, чтобы установить центр рабочей зоны.</p>
-                    </div>
-                 )}
+                setHasUnsavedChanges(false);
+                window.location.reload();
+              }}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Полное имя</label>
+                    <input name="name" type="text" defaultValue={user.name} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-careem-primary outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                      {user.id.startsWith('telegram-') ? 'Профиль' : 'Email'}
+                    </label>
+                    <input name="email" type="email" defaultValue={user.email} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-careem-primary outline-none" />
+                  </div>
+                </div>
 
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                     <div>
-                       <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Фотография профиля</label>
-                       <label className="mt-1 flex justify-center items-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl hover:border-careem-primary transition cursor-pointer relative group block w-full h-48 overflow-hidden bg-gray-50">
-                        {avatarPreview ? (
+                {user.role === UserRole.EXECUTOR && (
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-4">
+                      Желаемое место работы и радиус охвата
+                    </label>
+                    {locationAddress && (
+                      <p className="text-sm text-gray-700 mb-3 font-medium bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                        <i className="fas fa-map-marker-alt text-red-500 mr-2"></i>
+                        {locationAddress}
+                      </p>
+                    )}
+                    <div className="h-64 rounded-xl overflow-hidden mb-4 border border-gray-300 relative z-0">
+                      <MapContainer
+                        center={locationCoords ? [locationCoords.lat, locationCoords.lng] : [55.75, 37.61]}
+                        zoom={10}
+                        style={{ width: '100%', height: '100%' }}
+                      >
+                        <TileLayer
+                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                          keepBuffer={4}
+                        />
+                        <MapInvalidator />
+
+                        <DashboardMapEvents
+                          setLocationCoords={setLocationCoords}
+                          setLocationAddress={setLocationAddress}
+                          setHasUnsavedChanges={setHasUnsavedChanges}
+                        />
+
+                        {locationCoords && (
                           <>
-                            <img src={avatarPreview} alt="Avatar" className="absolute inset-0 w-full h-full object-contain bg-gray-50 opacity-100 group-hover:opacity-50 transition-opacity duration-300" />
+                            <Marker position={[locationCoords.lat, locationCoords.lng]} />
+                            {coverageRadius && (
+                              <Circle
+                                center={[locationCoords.lat, locationCoords.lng]}
+                                radius={coverageRadius * 1000}
+                                pathOptions={{ fillColor: '#828282', color: '#828282', fillOpacity: 0.5, weight: 2 }}
+                              />
+                            )}
+                          </>
+                        )}
+                      </MapContainer>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Радиус (км): {coverageRadius}</label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="50"
+                        value={coverageRadius}
+                        onChange={(e) => {
+                          setCoverageRadius(Number(e.target.value));
+                          setHasUnsavedChanges(true);
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">Кликните на карту, чтобы установить центр рабочей зоны.</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Фотография профиля</label>
+                    <label className="mt-1 flex justify-center items-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl hover:border-careem-primary transition cursor-pointer relative group block w-full h-48 overflow-hidden bg-gray-50">
+                      {avatarPreview ? (
+                        <>
+                          <img src={avatarPreview} alt="Avatar" className="absolute inset-0 w-full h-full object-contain bg-gray-50 opacity-100 group-hover:opacity-50 transition-opacity duration-300" />
+                          <div className="relative z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center">
+                            <i className="fas fa-camera text-gray-800 text-3xl mb-2"></i>
+                            <span className="text-sm font-bold text-gray-800 bg-white/80 px-3 py-1 rounded-full">Изменить фото</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="space-y-1 text-center w-full relative z-10">
+                          <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          <div className="flex text-sm text-gray-600 justify-center">
+                            <span className="relative rounded-md font-medium text-careem-primary hover:text-green-500 focus-within:outline-none">
+                              <span>Загрузить фото</span>
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500">PNG, JPG, GIF до 10MB</p>
+                        </div>
+                      )}
+                      <input type="file" className="sr-only" accept="image/*" onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            const base64String = reader.result as string;
+                            setAvatarPreview(base64String);
+                            setHasUnsavedChanges(true);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }} />
+                    </label>
+                  </div>
+
+                  {user.role === UserRole.EXECUTOR && (
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Фото транспорта <span className="text-gray-300 font-normal">(не обязательно)</span></label>
+                      <label className="mt-1 flex justify-center items-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl hover:border-careem-primary transition cursor-pointer relative group block w-full h-48 overflow-hidden bg-gray-50">
+                        {vehiclePhotoPreview ? (
+                          <>
+                            <img src={vehiclePhotoPreview} alt="Vehicle" className="absolute inset-0 w-full h-full object-contain bg-gray-50 opacity-100 group-hover:opacity-50 transition-opacity duration-300" />
                             <div className="relative z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center">
                               <i className="fas fa-camera text-gray-800 text-3xl mb-2"></i>
                               <span className="text-sm font-bold text-gray-800 bg-white/80 px-3 py-1 rounded-full">Изменить фото</span>
@@ -1858,114 +1895,74 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                             const reader = new FileReader();
                             reader.onloadend = () => {
                               const base64String = reader.result as string;
-                              setAvatarPreview(base64String);
+                              setVehiclePhotoPreview(base64String);
                               setHasUnsavedChanges(true);
                             };
                             reader.readAsDataURL(file);
                           }
                         }} />
                       </label>
-                     </div>
+                    </div>
+                  )}
+                </div>
 
-                     {user.role === UserRole.EXECUTOR && (
-                       <div>
-                         <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Фото транспорта <span className="text-gray-300 font-normal">(не обязательно)</span></label>
-                         <label className="mt-1 flex justify-center items-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl hover:border-careem-primary transition cursor-pointer relative group block w-full h-48 overflow-hidden bg-gray-50">
-                          {vehiclePhotoPreview ? (
-                            <>
-                              <img src={vehiclePhotoPreview} alt="Vehicle" className="absolute inset-0 w-full h-full object-contain bg-gray-50 opacity-100 group-hover:opacity-50 transition-opacity duration-300" />
-                              <div className="relative z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center">
-                                <i className="fas fa-camera text-gray-800 text-3xl mb-2"></i>
-                                <span className="text-sm font-bold text-gray-800 bg-white/80 px-3 py-1 rounded-full">Изменить фото</span>
-                              </div>
-                            </>
-                          ) : (
-                            <div className="space-y-1 text-center w-full relative z-10">
-                              <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                              <div className="flex text-sm text-gray-600 justify-center">
-                                <span className="relative rounded-md font-medium text-careem-primary hover:text-green-500 focus-within:outline-none">
-                                  <span>Загрузить фото</span>
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-500">PNG, JPG, GIF до 10MB</p>
+                {user.role === UserRole.EXECUTOR && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-4">Услуги и тарифы</label>
+                    <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-200">
+                      {SERVICE_TYPES.map(service => {
+                        const state = servicesState.find(s => s.serviceId === service.id)!;
+                        return (
+                          <div key={service.id} className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-gray-100">
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                id={`service-${service.id}`}
+                                checked={state.enabled}
+                                onChange={(e) => {
+                                  handleServiceChange(service.id, 'enabled', e.target.checked);
+                                  setHasUnsavedChanges(true);
+                                }}
+                                className="w-5 h-5 text-careem-primary rounded focus:ring-careem-primary border-gray-300"
+                              />
+                              <label htmlFor={`service-${service.id}`} className="text-sm font-medium text-gray-700 cursor-pointer select-none">
+                                {service.name}
+                              </label>
                             </div>
-                          )}
-                          <input type="file" className="sr-only" accept="image/*" onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                 const base64String = reader.result as string;
-                                 setVehiclePhotoPreview(base64String);
-                                 setHasUnsavedChanges(true);
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }} />
-                        </label>
-                       </div>
-                     )}
-                   </div>
 
-                 {user.role === UserRole.EXECUTOR && (
-                   <div>
-                     <label className="block text-xs font-bold text-gray-400 uppercase mb-4">Услуги и тарифы</label>
-                     <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-200">
-                       {SERVICE_TYPES.map(service => {
-                         const state = servicesState.find(s => s.serviceId === service.id)!;
-                         return (
-                           <div key={service.id} className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-gray-100">
-                             <div className="flex items-center gap-3">
-                               <input 
-                                 type="checkbox" 
-                                 id={`service-${service.id}`}
-                                 checked={state.enabled}
-                                 onChange={(e) => {
-                                    handleServiceChange(service.id, 'enabled', e.target.checked);
+                            {state.enabled && (
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  value={state.price}
+                                  onChange={(e) => {
+                                    handleServiceChange(service.id, 'price', e.target.value);
                                     setHasUnsavedChanges(true);
-                                 }}
-                                 className="w-5 h-5 text-careem-primary rounded focus:ring-careem-primary border-gray-300"
-                               />
-                               <label htmlFor={`service-${service.id}`} className="text-sm font-medium text-gray-700 cursor-pointer select-none">
-                                 {service.name}
-                               </label>
-                             </div>
-                             
-                             {state.enabled && (
-                               <div className="flex items-center gap-2">
-                                 <input 
-                                   type="number" 
-                                   value={state.price}
-                                   onChange={(e) => {
-                                      handleServiceChange(service.id, 'price', e.target.value);
-                                      setHasUnsavedChanges(true);
-                                   }}
-                                   className="w-24 px-2 py-1 text-right border border-gray-300 rounded-md focus:ring-careem-primary focus:border-careem-primary text-sm"
-                                   placeholder={service.pricePerHour.toString()}
-                                 />
-                                 <span className="text-sm text-gray-500">₽/час</span>
-                               </div>
-                             )}
-                           </div>
-                         );
-                       })}
-                     </div>
-                   </div>
-                 )}
+                                  }}
+                                  className="w-24 px-2 py-1 text-right border border-gray-300 rounded-md focus:ring-careem-primary focus:border-careem-primary text-sm"
+                                  placeholder={service.pricePerHour.toString()}
+                                />
+                                <span className="text-sm text-gray-500">₽/час</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
-                 <div>
-                   <label className="block text-xs font-bold text-gray-400 uppercase mb-2">О себе</label>
-                   <textarea name="description" rows={4} defaultValue={user.description === 'Новый пользователь' ? '' : user.description} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-careem-primary outline-none" placeholder="Расскажите о своем опыте и навыках..."></textarea>
-                 </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">О себе</label>
+                  <textarea name="description" rows={4} defaultValue={user.description === 'Новый пользователь' ? '' : user.description} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-careem-primary outline-none" placeholder="Расскажите о своем опыте и навыках..."></textarea>
+                </div>
 
-                 <div className="flex justify-end pt-4">
-                   <button type="submit" className="bg-careem-primary text-white font-bold py-3 px-8 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200">
-                     Сохранить изменения
-                   </button>
-                 </div>
-               </form>
+                <div className="flex justify-end pt-4">
+                  <button type="submit" className="bg-careem-primary text-white font-bold py-3 px-8 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200">
+                    Сохранить изменения
+                  </button>
+                </div>
+              </form>
             </div>
           )}
         </div>
@@ -1984,12 +1981,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 <br />
                 Для подтверждения введите ваш пароль.
               </p>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Пароль</label>
-                  <input 
-                    type="password" 
+                  <input
+                    type="password"
                     value={deletePassword}
                     onChange={(e) => {
                       setDeletePassword(e.target.value);
@@ -2002,7 +1999,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 </div>
 
                 <div className="flex gap-3">
-                  <button 
+                  <button
                     onClick={() => {
                       setIsDeleteModalOpen(false);
                       setDeletePassword('');
@@ -2012,7 +2009,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   >
                     Отмена
                   </button>
-                  <button 
+                  <button
                     onClick={handleDeleteProfile}
                     className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition shadow-lg shadow-red-200"
                   >

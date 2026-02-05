@@ -9,7 +9,7 @@ interface AuthProps {
 }
 
 const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
-  const { login, register, loginWithGoogle } = useAuth();
+  const { login, register, loginWithGoogle, loginWithTelegram } = useAuth();
   const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(() => {
     return searchParams.get('mode') !== 'register';
@@ -89,6 +89,25 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
       setIsLoading(false);
     }
   };
+
+  const handleTelegramLogin = async () => {
+    setIsLoading(true);
+    try {
+      await loginWithTelegram();
+      toast.success('Успешный вход через Telegram!');
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        window.location.href = '/dashboard';
+      }
+    } catch (error) {
+      toast.error('Ошибка входа через Telegram');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50 py-12">
@@ -209,7 +228,7 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
             <div className="mt-8 pt-8 border-t border-gray-100 text-center">
               <p className="text-xs text-gray-400 mb-4">Или войти через</p>
               <div className="flex justify-center gap-4">
-                <button className="w-10 h-10 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-[#24A1DE] hover:bg-gray-50 transition"><i className="fab fa-telegram-plane"></i></button>
+                <button onClick={handleTelegramLogin} type="button" className="w-10 h-10 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-[#24A1DE] hover:bg-gray-50 transition"><i className="fab fa-telegram-plane"></i></button>
                 <button onClick={handleGoogleLogin} type="button" className="w-10 h-10 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-red-500 hover:bg-gray-50 transition"><i className="fab fa-google"></i></button>
               </div>
             </div>

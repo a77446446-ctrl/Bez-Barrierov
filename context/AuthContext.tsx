@@ -9,7 +9,8 @@ interface AuthContextType {
   logout: () => void;
   /* ... existing code ... */
   updateUser: (user: User) => void;
-  loginWithGoogle: () => Promise<void>; // Added
+  loginWithGoogle: () => Promise<void>;
+  loginWithTelegram: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -51,7 +52,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const login = async (email: string, password: string) => {
     const storedUsers = JSON.parse(localStorage.getItem('bez_barrierov_users') || '[]');
     const foundUser = storedUsers.find((u: User) => u.email.toLowerCase() === email.toLowerCase());
-    
+
     if (foundUser) {
       setUser(foundUser);
       localStorage.setItem('bez_barrierov_user', JSON.stringify(foundUser));
@@ -63,7 +64,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   /* ... existing register ... */
   const register = async (name: string, email: string, password: string, role: UserRole) => {
     const storedUsers = JSON.parse(localStorage.getItem('bez_barrierov_users') || '[]');
-    
+
     if (storedUsers.find((u: User) => u.email.toLowerCase() === email.toLowerCase())) {
       throw new Error('Пользователь с таким email уже существует');
     }
@@ -80,7 +81,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const updatedUsers = [...storedUsers, newUser];
     localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedUsers));
-    
+
     // Auto login
     setUser(newUser);
     localStorage.setItem('bez_barrierov_user', JSON.stringify(newUser));
@@ -90,23 +91,62 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 800));
 
-    const googleUserEmail = "google_user@gmail.com";
+    const googleUserEmail = window.prompt("Введите Email для входа через Google (симуляция):", "google_user@gmail.com");
+
+    if (!googleUserEmail) {
+      // User cancelled
+      return;
+    }
+
     const storedUsers = JSON.parse(localStorage.getItem('bez_barrierov_users') || '[]');
-    let foundUser = storedUsers.find((u: User) => u.email.toLowerCase() === googleUserEmail);
+    let foundUser = storedUsers.find((u: User) => u.email.toLowerCase() === googleUserEmail.toLowerCase());
 
     if (!foundUser) {
-        // Create if doesn't exist
-        foundUser = {
-            id: "google-" + Date.now().toString(),
-            name: "Google User",
-            email: googleUserEmail,
-            role: UserRole.CUSTOMER, // Default to customer
-            phone: '',
-            rating: 5.0,
-            description: 'Logged in via Google'
-        };
-        const updatedUsers = [...storedUsers, foundUser];
-        localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedUsers));
+      // Create if doesn't exist
+      foundUser = {
+        id: "google-" + Date.now().toString(),
+        name: "Google User (" + googleUserEmail.split('@')[0] + ")",
+        email: googleUserEmail,
+        role: UserRole.CUSTOMER, // Default to customer
+        phone: '',
+        rating: 5.0,
+        description: 'Logged in via Google'
+      };
+      const updatedUsers = [...storedUsers, foundUser];
+      localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedUsers));
+    }
+
+    setUser(foundUser);
+    localStorage.setItem('bez_barrierov_user', JSON.stringify(foundUser));
+  };
+
+  const loginWithTelegram = async () => {
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    const telegramUserEmail = window.prompt("Введите Email/ID для входа через Telegram (симуляция):", "telegram_user@t.me");
+
+    if (!telegramUserEmail) {
+      // User cancelled
+      return;
+    }
+
+    const storedUsers = JSON.parse(localStorage.getItem('bez_barrierov_users') || '[]');
+    let foundUser = storedUsers.find((u: User) => u.email.toLowerCase() === telegramUserEmail.toLowerCase());
+
+    if (!foundUser) {
+      // Create if doesn't exist
+      foundUser = {
+        id: "telegram-" + Date.now().toString(),
+        name: "Telegram User (" + telegramUserEmail.split('@')[0] + ")",
+        email: telegramUserEmail,
+        role: UserRole.CUSTOMER, // Default to customer
+        phone: '',
+        rating: 5.0,
+        description: 'Logged in via Telegram'
+      };
+      const updatedUsers = [...storedUsers, foundUser];
+      localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedUsers));
     }
 
     setUser(foundUser);
@@ -119,7 +159,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, loginWithGoogle, logout, updateUser, isLoading }}>
+    <AuthContext.Provider value={{ user, login, register, loginWithGoogle, loginWithTelegram, logout, updateUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
