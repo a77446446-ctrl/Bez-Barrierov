@@ -9,20 +9,16 @@ import Admin from './pages/Admin';
 import Terms from './pages/Terms';
 import UserProfile from './pages/UserProfile';
 import CreateOrder from './pages/CreateOrder';
+import Executors from './pages/Executors';
+import OpenOrders from './pages/OpenOrders';
 import { useAuth } from './context/AuthContext';
 import { Toaster, toast } from 'react-hot-toast';
 
 import ErrorBoundary from './components/ErrorBoundary';
 
 const App: React.FC = () => {
-  const { user, login } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
-
-  const handleLogin = (role: UserRole) => {
-    login(role);
-    navigate('/dashboard');
-    toast.success('Вы успешно вошли в систему');
-  };
 
   const handleBook = (executor: User) => {
     if (!user) {
@@ -60,16 +56,24 @@ const App: React.FC = () => {
                 onBook={handleBook} 
               />
             } />
-            <Route path="/auth" element={<Auth onLogin={handleLogin} />} />
+            <Route path="/auth" element={<Auth onSuccess={() => navigate('/dashboard')} />} />
             <Route path="/dashboard" element={
-              user ? <Dashboard user={user} onUpdateStatus={handleUpdateStatus} /> : <Auth onLogin={handleLogin} />
+              user ? <Dashboard user={user} onUpdateStatus={handleUpdateStatus} /> : <Auth onSuccess={() => navigate('/dashboard')} />
             } />
             <Route path="/admin" element={
               user?.role === UserRole.ADMIN ? <Admin /> : <Landing onViewProfile={() => {}} onBook={() => {}} />
             } />
+            <Route path="/executors" element={
+              user ? (
+                user.role === UserRole.CUSTOMER ? <Executors /> : <Dashboard user={user} onUpdateStatus={handleUpdateStatus} />
+              ) : (
+                <Auth onSuccess={() => navigate('/executors')} />
+              )
+            } />
             <Route path="/terms" element={<Terms />} />
             <Route path="/users/:id" element={<UserProfile onBook={(id) => navigate(`/orders/create?executorId=${id}`)} />} />
             <Route path="/orders/create" element={<CreateOrder />} />
+            <Route path="/orders/open" element={<OpenOrders />} />
           </Routes>
         </Layout>
     </ErrorBoundary>

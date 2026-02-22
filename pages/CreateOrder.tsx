@@ -10,12 +10,9 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 
 // Fix for default Leaflet markers
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-
 let DefaultIcon = L.icon({
-    iconUrl: icon,
-    shadowUrl: iconShadow,
+    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
     iconSize: [25, 41],
     iconAnchor: [12, 41]
 });
@@ -146,6 +143,7 @@ const UnifiedMapPicker = ({
   const updateLocation = (coords: number[], setter: (loc: Location) => void) => {
       const [lat, lng] = coords;
       setter({ lat, lng, address: 'Определение адреса...' });
+      setMapCenter([lat, lng]);
       
       fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
         .then(response => response.json())
@@ -166,54 +164,55 @@ const UnifiedMapPicker = ({
     <div className="mb-4">
       {/* Controls for Transport Mode */}
       {serviceId === '3' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-              <AddressAutocomplete
-                  label="Откуда (Точка А)"
-                  value={locationFrom}
-                  onChange={(loc) => {
-                      setLocationFrom(loc);
-                      setMapCenter([loc.lat, loc.lng]);
-                      setActiveInput('to');
-                  }}
-                  isActive={activeInput === 'from'}
-                  onFocus={() => setActiveInput('from')}
-                  color="bg-green-500"
-                  placeholder="Введите адрес подачи"
-              />
-
-              <AddressAutocomplete
-                  label="Куда (Точка Б)"
-                  value={locationTo}
-                  onChange={(loc) => {
-                      setLocationTo(loc);
-                      setMapCenter([loc.lat, loc.lng]);
-                  }}
-                  isActive={activeInput === 'to'}
-                  onFocus={() => setActiveInput('to')}
-                  color="bg-red-500"
-                  placeholder="Введите адрес назначения"
-              />
+          <div className="mb-3 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="text-sm font-semibold text-slate-200">Выберите точку для установки на карте:</div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveInput('from')}
+                className={[
+                  'px-3 py-2 rounded-2xl text-sm font-semibold transition border',
+                  activeInput === 'from'
+                    ? 'bg-green-500/15 text-green-200 border-green-500/25'
+                    : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white'
+                ].join(' ')}
+              >
+                Точка A
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveInput('to')}
+                className={[
+                  'px-3 py-2 rounded-2xl text-sm font-semibold transition border',
+                  activeInput === 'to'
+                    ? 'bg-red-500/15 text-red-200 border-red-500/25'
+                    : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white'
+                ].join(' ')}
+              >
+                Точка B
+              </button>
+            </div>
           </div>
       )}
 
       {/* Controls for General Mode */}
       {serviceId !== '3' && (
           <div className="mb-3">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-slate-200 mb-2">
                 Место встречи <span className="text-red-500">*</span>
             </label>
-            <p className="text-xs text-gray-500 mb-2">
+            <p className="text-xs text-slate-400 mb-2">
                 Укажите примерный район или место встречи. Точный адрес (квартира, подъезд) вы сможете сообщить помощнику лично.
             </p>
             <div className="relative rounded-md shadow-sm">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                    <i className={`fas ${generalLocation ? 'fa-map-marker-alt text-careem-primary' : 'fa-search text-gray-400'}`}></i>
+                    <i className={`fas ${generalLocation ? 'fa-map-marker-alt text-careem-primary' : 'fa-search text-slate-500'}`}></i>
                 </div>
                 <input 
                     type="text" 
                     value={generalLocation?.address || ''}
                     readOnly
-                    className="block w-full rounded-md border-gray-300 pl-10 focus:border-careem-primary focus:ring-careem-primary sm:text-sm py-2 bg-gray-50 text-gray-900"
+                    className="block w-full rounded-xl border border-white/10 pl-10 focus:border-careem-primary focus:ring-careem-primary/60 sm:text-sm py-3 bg-[#0B1220]/60 text-slate-100 placeholder-slate-500"
                     placeholder="Нажмите на карту для выбора места" 
                 />
             </div>
@@ -221,8 +220,8 @@ const UnifiedMapPicker = ({
       )}
 
       {/* Unified Map Instance - Never Unmounts */}
-      <div className="h-96 rounded-xl overflow-hidden border border-gray-300 relative z-0">
-        <ErrorBoundary fallback={<div className="h-full w-full bg-gray-100 flex items-center justify-center text-gray-500">Ошибка загрузки карты</div>}>
+      <div className="h-96 rounded-2xl overflow-hidden border border-white/10 relative z-0 bg-white/5">
+        <ErrorBoundary fallback={<div className="h-full w-full bg-white/5 flex items-center justify-center text-slate-400">Ошибка загрузки карты</div>}>
             <MapContainer 
                 center={[55.75, 37.61]}
                 zoom={10} 
@@ -262,7 +261,7 @@ const UnifiedMapPicker = ({
                 {serviceId === '3' && routePositions.length > 0 && (
                      <Polyline 
                         positions={routePositions}
-                        color="#004F32"
+                        color="#2D6BFF"
                         weight={5}
                         opacity={0.7}
                      />
@@ -279,19 +278,47 @@ const UnifiedMapPicker = ({
 
         {/* Distance Banner */}
         {serviceId === '3' && routeDistance !== null && (
-            <div className="absolute bottom-4 right-4 z-[1000] bg-white px-4 py-2 rounded-lg shadow-lg border border-gray-200 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-4">
-                <div className="bg-green-100 p-2 rounded-full text-careem-primary">
+            <div className="absolute bottom-4 right-4 z-[1000] bg-[#0B1220]/75 px-4 py-2 rounded-2xl shadow-lg border border-white/10 flex items-center gap-2 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4">
+                <div className="bg-[#13213A] p-2 rounded-full text-careem-primary border border-[#1B2D4F]">
                     <i className="fas fa-route"></i>
                 </div>
                 <div>
-                    <div className="text-xs text-gray-500 font-medium">Расстояние</div>
-                    <div className="text-lg font-bold text-gray-900">{routeDistance.toFixed(1)} км</div>
+                    <div className="text-xs text-slate-400 font-medium">Расстояние</div>
+                    <div className="text-lg font-extrabold text-slate-100">{routeDistance.toFixed(1)} км</div>
                 </div>
             </div>
         )}
       </div>
       
-      <p className="text-xs text-gray-500 mt-2 text-center">
+      {serviceId === '3' ? (
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-white/10 bg-[#0B1220]/60 px-4 py-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-xl bg-green-500/15 border border-green-500/25 text-green-200">
+                A
+              </span>
+              Точка А (откуда)
+            </div>
+            <div className="mt-2 text-sm text-slate-100 break-words">
+              {locationFrom?.address || 'Не выбрано'}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-[#0B1220]/60 px-4 py-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-xl bg-red-500/15 border border-red-500/25 text-red-200">
+                B
+              </span>
+              Точка Б (куда)
+            </div>
+            <div className="mt-2 text-sm text-slate-100 break-words">
+              {locationTo?.address || 'Не выбрано'}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <p className="text-xs text-slate-400 mt-3 text-center">
          {serviceId === '3' 
             ? '* Нажмите на поле "Откуда" или "Куда", затем кликните по карте.' 
             : '* Выберите точку встречи на карте.'}
@@ -331,7 +358,7 @@ const CreateOrder: React.FC = () => {
   const [time, setTime] = useState('');
   const [price, setPrice] = useState<number>(0);
   const [details, setDetails] = useState('');
-  const [allowOpenSelection, setAllowOpenSelection] = useState(true);
+  const [allowOpenSelection, setAllowOpenSelection] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [voiceMessage, setVoiceMessage] = useState<string | null>(null);
@@ -340,6 +367,66 @@ const CreateOrder: React.FC = () => {
   const [locationFrom, setLocationFrom] = useState<Location | undefined>(undefined);
   const [locationTo, setLocationTo] = useState<Location | undefined>(undefined);
   const [generalLocation, setGeneralLocation] = useState<Location | undefined>(undefined);
+
+  const audioBlobToWavDataUrl = async (blob: Blob): Promise<string> => {
+    const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+    const audioContext: AudioContext = new AudioContextCtor();
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+
+      const numberOfChannels = audioBuffer.numberOfChannels;
+      const sampleRate = audioBuffer.sampleRate;
+      const samples = audioBuffer.length;
+      const bitsPerSample = 16;
+      const blockAlign = numberOfChannels * (bitsPerSample / 8);
+      const byteRate = sampleRate * blockAlign;
+      const dataSize = samples * blockAlign;
+
+      const wavBuffer = new ArrayBuffer(44 + dataSize);
+      const view = new DataView(wavBuffer);
+      const writeString = (offset: number, value: string) => {
+        for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
+      };
+
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + dataSize, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, numberOfChannels, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, byteRate, true);
+      view.setUint16(32, blockAlign, true);
+      view.setUint16(34, bitsPerSample, true);
+      writeString(36, 'data');
+      view.setUint32(40, dataSize, true);
+
+      const channelData = Array.from({ length: numberOfChannels }, (_, ch) => audioBuffer.getChannelData(ch));
+      let offset = 44;
+      for (let i = 0; i < samples; i++) {
+        for (let ch = 0; ch < numberOfChannels; ch++) {
+          let sample = channelData[ch][i];
+          sample = Math.max(-1, Math.min(1, sample));
+          const int16 = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+          view.setInt16(offset, int16, true);
+          offset += 2;
+        }
+      }
+
+      const bytes = new Uint8Array(wavBuffer);
+      let binary = '';
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      const base64 = btoa(binary);
+      return `data:audio/wav;base64,${base64}`;
+    } finally {
+      await audioContext.close();
+    }
+  };
 
   useEffect(() => {
     // Load executors
@@ -372,18 +459,47 @@ const CreateOrder: React.FC = () => {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const preferredMimeTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/ogg',
+        'audio/mp4'
+      ];
+
+      const supportedMimeType = preferredMimeTypes.find((t) => {
+        try {
+          return typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t);
+        } catch {
+          return false;
+        }
+      });
+
+      const recorder = supportedMimeType ? new MediaRecorder(stream, { mimeType: supportedMimeType }) : new MediaRecorder(stream);
       const chunks: BlobPart[] = [];
 
       recorder.ondataavailable = (e) => chunks.push(e.data);
       recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/webm' });
-        const reader = new FileReader();
-        reader.readAsDataURL(blob);
-        reader.onloadend = () => {
-          setVoiceMessage(reader.result as string);
-        };
-        stream.getTracks().forEach(track => track.stop());
+        const blobType =
+          recorder.mimeType ||
+          (chunks[0] instanceof Blob ? chunks[0].type : '') ||
+          supportedMimeType ||
+          'audio/webm';
+        const blob = new Blob(chunks, { type: blobType });
+        void (async () => {
+          try {
+            const wavDataUrl = await audioBlobToWavDataUrl(blob);
+            setVoiceMessage(wavDataUrl);
+          } catch {
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = () => {
+              setVoiceMessage(reader.result as string);
+            };
+          } finally {
+            stream.getTracks().forEach(track => track.stop());
+          }
+        })();
       };
 
       recorder.start();
@@ -511,7 +627,7 @@ const CreateOrder: React.FC = () => {
       window.dispatchEvent(new Event('storage'));
       
       toast.success(`Заказ создан успешно!`);
-      navigate('/dashboard');
+      navigate('/dashboard?tab=orders');
     }, 1000);
   };
 
@@ -532,23 +648,23 @@ const CreateOrder: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="py-20 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-careem-primary"></div>
       </div>
     );
   }
 
   return (
-      <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="bg-careem-primary px-6 py-4">
-            <h1 className="text-xl font-bold text-white">Создание заказа</h1>
+      <div className="py-10 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-2xl mx-auto rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.35)] overflow-hidden">
+          <div className="px-6 py-5 border-b border-white/10">
+            <h1 className="text-xl font-extrabold text-slate-100">Создание заказа</h1>
           </div>
           
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Service Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-slate-200 mb-2">
               Выберите услугу <span className="text-red-500">*</span>
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -584,23 +700,23 @@ const CreateOrder: React.FC = () => {
                   <div 
                     key={service.id}
                     onClick={() => isAvailable && handleServiceChange(service.id)}
-                    className={`border rounded-lg p-3 transition relative ${
+                    className={`border rounded-2xl p-4 transition relative ${
                       !isAvailable 
-                        ? 'bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed grayscale' 
+                        ? 'bg-white/5 border-white/10 opacity-50 cursor-not-allowed grayscale' 
                         : serviceId === service.id 
-                          ? 'border-careem-primary bg-green-50 ring-1 ring-careem-primary cursor-pointer' 
-                          : 'border-gray-200 hover:border-green-300 cursor-pointer'
+                          ? 'border-careem-primary bg-[#13213A] ring-1 ring-careem-primary/40 cursor-pointer' 
+                          : 'border-white/10 hover:border-white/20 bg-white/5 cursor-pointer'
                     }`}
                   >
-                    <div className="font-medium text-gray-900 flex justify-between items-start">
+                    <div className="font-semibold text-slate-100 flex justify-between items-start gap-3">
                        <span>{service.name}</span>
                        {isAvailable && selectedExecutor && (
-                         <span className="text-xs bg-green-100 text-careem-primary px-2 py-0.5 rounded-full ml-2 shrink-0">
+                         <span className="text-xs bg-[#13213A] text-slate-200 px-2 py-0.5 rounded-full border border-[#1B2D4F] shrink-0">
                            Тариф
                          </span>
                        )}
                     </div>
-                    <div className={`text-sm mt-1 ${isAvailable ? 'text-gray-500' : 'text-gray-400'}`}>
+                    <div className={`text-sm mt-2 ${isAvailable ? 'text-slate-400' : 'text-slate-500'}`}>
                       {isAvailable ? `${displayPrice} ₽/час` : 'Не предоставляется'}
                     </div>
                   </div>
@@ -611,13 +727,13 @@ const CreateOrder: React.FC = () => {
 
           {/* Executor Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-slate-200 mb-2">
               Выберите помощника <span className="text-red-500">*</span>
             </label>
             <select
               value={executorId}
               onChange={(e) => setExecutorId(e.target.value)}
-              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-careem-primary focus:border-careem-primary sm:text-sm rounded-md border"
+              className="mt-1 block w-full pl-4 pr-10 py-3 text-base border border-white/10 focus:outline-none focus:ring-2 focus:ring-careem-primary/60 focus:border-careem-primary sm:text-sm rounded-xl bg-[#0B1220]/60 text-slate-100"
             >
               <option value="">-- Любой свободный специалист --</option>
               {executors.map((ex) => (
@@ -630,27 +746,27 @@ const CreateOrder: React.FC = () => {
 
           {/* Option to allow others to respond if rejected */}
           {executorId && (
-            <div className="bg-green-50 p-4 rounded-xl border border-green-100 flex items-start gap-3">
+            <div className="bg-white/5 p-4 rounded-2xl border border-white/10 flex items-start gap-3">
               <input
                 type="checkbox"
                 id="allowOpenSelection"
                 checked={allowOpenSelection}
                 onChange={(e) => setAllowOpenSelection(e.target.checked)}
-                className="mt-1 w-5 h-5 text-careem-primary rounded focus:ring-careem-primary border-gray-300"
+                className="mt-1 w-5 h-5 text-careem-primary rounded focus:ring-careem-primary/60 border-white/20 bg-[#0B1220]/60"
               />
-              <label htmlFor="allowOpenSelection" className="text-sm text-indigo-900 cursor-pointer select-none">
-                <span className="font-bold block mb-1">Если {selectedExecutor?.name} откажется:</span>
+              <label htmlFor="allowOpenSelection" className="text-sm text-slate-300 cursor-pointer select-none">
+                <span className="font-semibold text-slate-100 block mb-1">Если {selectedExecutor?.name} откажется:</span>
                 Разрешить другим помощникам откликаться на этот заказ (вы сможете выбрать исполнителя из списка откликнувшихся)
               </label>
             </div>
           )}
 
           {/* Location Selection */}
-          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 relative">
-             <h3 className="font-medium text-gray-900 mb-4">Место оказания услуги</h3>
+          <div className="bg-white/5 p-4 sm:p-6 rounded-3xl border border-white/10 relative">
+             <h3 className="font-bold text-slate-100 mb-4">Место оказания услуги</h3>
              
              {isSwitching && (
-               <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center backdrop-blur-sm rounded-xl">
+               <div className="absolute inset-0 bg-[#0B1220]/40 z-10 flex items-center justify-center backdrop-blur-sm rounded-3xl">
                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-careem-primary"></div>
                </div>
              )}
@@ -671,55 +787,55 @@ const CreateOrder: React.FC = () => {
           {/* Date and Time */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-semibold text-slate-200 mb-2">
                 Дата <span className="text-red-500">*</span>
               </label>
               <input
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="shadow-sm focus:ring-careem-primary focus:border-careem-primary block w-full sm:text-sm border-gray-300 rounded-md p-2 border"
+                className="shadow-sm focus:ring-2 focus:ring-careem-primary/60 focus:border-careem-primary block w-full sm:text-sm border border-white/10 rounded-xl py-3 pl-4 pr-12 bg-[#0B1220]/60 text-slate-100"
                 min={new Date().toISOString().split('T')[0]}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-semibold text-slate-200 mb-2">
                 Время <span className="text-red-500">*</span>
               </label>
               <input
                 type="time"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
-                className="shadow-sm focus:ring-careem-primary focus:border-careem-primary block w-full sm:text-sm border-gray-300 rounded-md p-2 border"
+                className="shadow-sm focus:ring-2 focus:ring-careem-primary/60 focus:border-careem-primary block w-full sm:text-sm border border-white/10 rounded-xl py-3 pl-4 pr-12 bg-[#0B1220]/60 text-slate-100"
               />
             </div>
           </div>
 
           {/* Details */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-semibold text-slate-200 mb-2">
               Детали заказа (адрес, особенности)
             </label>
             <textarea
               rows={3}
               value={details}
               onChange={(e) => setDetails(e.target.value)}
-              className="shadow-sm focus:ring-careem-primary focus:border-careem-primary block w-full sm:text-sm border-gray-300 rounded-md p-2 border"
+              className="shadow-sm focus:ring-2 focus:ring-careem-primary/60 focus:border-careem-primary block w-full sm:text-sm border border-white/10 rounded-xl py-3 px-4 bg-[#0B1220]/60 text-slate-100 placeholder-slate-500"
               placeholder="Например: встреча у главного входа, нужен пандус..."
             />
           </div>
 
           {/* Voice Message */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-slate-200 mb-2">
               Голосовое сообщение (для помощника)
             </label>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
               {!isRecording && !voiceMessage && (
                 <button
                   type="button"
                   onClick={startRecording}
-                  className="flex items-center gap-2 bg-red-100 text-red-700 px-4 py-2 rounded-full hover:bg-red-200 transition"
+                  className="inline-flex items-center justify-center gap-2 bg-red-500/15 text-red-200 px-4 py-2.5 rounded-2xl border border-red-500/25 hover:bg-red-500/20 transition w-full sm:w-auto"
                 >
                   <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
                   Записать сообщение
@@ -727,22 +843,35 @@ const CreateOrder: React.FC = () => {
               )}
 
               {isRecording && (
-                <button
-                  type="button"
-                  onClick={stopRecording}
-                  className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-full hover:bg-red-700 transition animate-pulse"
-                >
-                  <i className="fas fa-stop"></i> Остановить запись
-                </button>
+                <div className="flex items-center gap-4 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={stopRecording}
+                    className="inline-flex items-center justify-center gap-2 bg-red-600 text-white px-4 py-2.5 rounded-2xl hover:bg-red-700 transition w-full sm:w-auto"
+                  >
+                    <i className="fas fa-stop"></i> Остановить запись
+                  </button>
+
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                    <div className="flex items-end gap-1 h-6">
+                      <span className="w-1 bg-red-400/80 rounded-full animate-pulse" style={{ height: 8 }} />
+                      <span className="w-1 bg-red-400/80 rounded-full animate-pulse" style={{ height: 18, animationDelay: '120ms' }} />
+                      <span className="w-1 bg-red-400/80 rounded-full animate-pulse" style={{ height: 12, animationDelay: '240ms' }} />
+                      <span className="w-1 bg-red-400/80 rounded-full animate-pulse" style={{ height: 20, animationDelay: '360ms' }} />
+                      <span className="w-1 bg-red-400/80 rounded-full animate-pulse" style={{ height: 10, animationDelay: '480ms' }} />
+                    </div>
+                  </div>
+                </div>
               )}
 
               {voiceMessage && (
-                <div className="flex items-center gap-3 w-full">
-                  <audio src={voiceMessage} controls className="h-10 w-full max-w-xs" />
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full min-w-0">
+                  <audio src={voiceMessage} controls className="h-10 w-full" />
                   <button
                     type="button"
                     onClick={clearRecording}
-                    className="text-gray-400 hover:text-red-500 transition p-2"
+                    className="text-slate-400 hover:text-red-400 transition p-2 self-end sm:self-auto"
                     title="Удалить запись"
                   >
                     <i className="fas fa-trash-alt"></i>
@@ -750,37 +879,37 @@ const CreateOrder: React.FC = () => {
                 </div>
               )}
             </div>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-slate-400 mt-2">
               Вы можете записать пожелания голосом, если неудобно печатать.
             </p>
           </div>
 
           {/* Price Input */}
           <div>
-             <label className="block text-sm font-medium text-gray-700 mb-2">
+             <label className="block text-sm font-semibold text-slate-200 mb-2">
                 {selectedExecutor ? 'Стоимость услуги (Тариф помощника)' : 'Предложите вашу цену (₽)'} <span className="text-red-500">*</span>
              </label>
-             <div className="relative rounded-md shadow-sm">
+             <div className="relative rounded-xl shadow-sm">
                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                 <span className="text-gray-500 sm:text-sm">₽</span>
+                 <span className="text-slate-400 sm:text-sm">₽</span>
                </div>
                <input
                  type="number"
                  value={price || ''}
                  readOnly={!!selectedExecutor}
                  onChange={(e) => !selectedExecutor && setPrice(Number(e.target.value))}
-                 className={`block w-full rounded-md border-gray-300 pl-7 pr-12 focus:border-careem-primary focus:ring-careem-primary sm:text-sm border p-2 ${
-                   selectedExecutor ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
+                 className={`block w-full rounded-xl border border-white/10 pl-7 pr-12 focus:border-careem-primary focus:ring-careem-primary/60 sm:text-sm border py-3 px-4 bg-[#0B1220]/60 text-slate-100 ${
+                   selectedExecutor ? 'opacity-70 cursor-not-allowed' : ''
                  }`}
                  placeholder="0.00"
                  min="0"
                />
                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                 <span className="text-gray-500 sm:text-sm">RUB</span>
+                 <span className="text-slate-400 sm:text-sm">RUB</span>
                </div>
              </div>
              {selectedExecutor && (
-               <p className="mt-1 text-sm text-gray-500">
+               <p className="mt-2 text-sm text-slate-400">
                  * Цена установлена выбранным помощником.
                </p>
              )}
@@ -795,14 +924,14 @@ const CreateOrder: React.FC = () => {
           )} */}
 
           {/* Submit Button */}
-          <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-             <div className="text-lg font-bold text-gray-900">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-white/10">
+             <div className="text-lg font-extrabold text-slate-100">
                Итого: <span className="text-careem-primary">{price} ₽</span>
              </div>
              <button
               type="submit"
               disabled={isSubmitting}
-              className={`bg-careem-primary text-white font-bold py-3 px-8 rounded-xl hover:bg-careem-dark transition shadow-lg shadow-green-200 flex items-center gap-2 ${
+              className={`bg-careem-primary text-white font-semibold py-3 px-8 rounded-2xl hover:bg-[#255EE6] transition shadow-lg shadow-[#2D6BFF]/20 flex items-center justify-center gap-2 w-full sm:w-auto ${
                 isSubmitting ? 'opacity-70 cursor-wait' : ''
               }`}
             >

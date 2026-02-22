@@ -36,6 +36,7 @@ export interface User {
   locationCoordinates?: Location;
   coverageRadius?: number; // km
   description?: string;
+  profileVerificationStatus?: 'none' | 'pending' | 'verified';
   vehiclePhoto?: string;
   customServices?: {
     serviceId: string;

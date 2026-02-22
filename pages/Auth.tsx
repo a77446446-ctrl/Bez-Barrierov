@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { UserRole } from '../types';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,7 @@ interface AuthProps {
 
 const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
   const { login, register, loginWithGoogle, loginWithTelegram } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(() => {
     return searchParams.get('mode') !== 'register';
@@ -110,135 +111,173 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
 
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50 py-12">
-      <div className="max-w-md w-full animate-in zoom-in-95 duration-300">
-        <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
-          <div className="p-8 pb-0">
-            <div className="w-12 h-12 bg-careem-primary text-white rounded-xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-100">
-              <i className="fas fa-key text-xl"></i>
-            </div>
-            <h2 className="text-3xl font-black text-center text-gray-900 mb-2">{isLogin ? 'С возвращением!' : 'Присоединяйтесь'}</h2>
-            <p className="text-center text-gray-500 text-sm mb-8">
-              {isLogin ? 'Войдите в систему, чтобы управлять заказами' : 'Создайте аккаунт для доступа к сервису'}
-            </p>
+    <div className="w-full animate-in zoom-in-95 duration-300">
+      <div className="rounded-3xl border border-white/5 bg-white/5 backdrop-blur-xl shadow-[0_24px_80px_rgba(0,0,0,0.45)] overflow-hidden">
+        <div className="p-10 pb-7 text-center relative">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="absolute left-5 top-5 w-10 h-10 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition flex items-center justify-center text-slate-200"
+            aria-label="Вернуться на приветственную страницу"
+            title="На главную"
+          >
+            <i className="fas fa-arrow-left"></i>
+          </button>
+          <div className="w-14 h-14 rounded-2xl bg-careem-primary mx-auto flex items-center justify-center shadow-lg shadow-[#2D6BFF]/20">
+            <i className="fas fa-shield-halved text-white text-xl"></i>
+          </div>
+          <h2 className="mt-6 text-3xl font-extrabold tracking-tight text-slate-100">
+            {isLogin ? 'С возвращением' : 'Новый аккаунт'}
+          </h2>
+          <p className="mt-2 text-sm text-slate-400">Добро пожаловать в БезБарьеров</p>
+        </div>
+
+        <div className="px-10 pb-10">
+          <div className="rounded-2xl bg-[#0B1220]/50 border border-white/5 p-1 flex gap-1">
+            <button
+              type="button"
+              onClick={() => setIsLogin(true)}
+              className={[
+                'flex-1 rounded-xl py-2.5 text-sm font-semibold transition',
+                isLogin ? 'bg-careem-primary text-white shadow-md shadow-[#2D6BFF]/20' : 'text-slate-400 hover:text-slate-100'
+              ].join(' ')}
+            >
+              Вход
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsLogin(false)}
+              className={[
+                'flex-1 rounded-xl py-2.5 text-sm font-semibold transition',
+                !isLogin ? 'bg-careem-primary text-white shadow-md shadow-[#2D6BFF]/20' : 'text-slate-400 hover:text-slate-100'
+              ].join(' ')}
+            >
+              Новый аккаунт
+            </button>
           </div>
 
-          <div className="px-8 pb-8">
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              {!isLogin && (
-                <>
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    <button
-                      type="button"
-                      onClick={() => setRole(UserRole.CUSTOMER)}
-                      className={`py-2 px-4 text-xs font-bold rounded-lg border-2 transition ${role === UserRole.CUSTOMER ? 'border-careem-primary bg-green-50 text-careem-primary' : 'border-gray-100 text-gray-400'}`}
-                    >
-                      Я заказчик
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRole(UserRole.EXECUTOR)}
-                      className={`py-2 px-4 text-xs font-bold rounded-lg border-2 transition ${role === UserRole.EXECUTOR ? 'border-careem-primary bg-green-50 text-careem-primary' : 'border-gray-100 text-gray-400'}`}
-                    >
-                      Я помощник
-                    </button>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Имя</label>
-                    <div className="relative">
-                      <i className="fas fa-user absolute left-4 top-3.5 text-gray-300"></i>
-                      <input
-                        type="text"
-                        required
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full bg-gray-50 border-gray-100 rounded-xl py-3 pl-12 pr-4 focus:ring-2 focus:ring-careem-primary focus:outline-none"
-                        placeholder="Ваше имя"
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Email</label>
-                <div className="relative">
-                  <i className="fas fa-envelope absolute left-4 top-3.5 text-gray-300"></i>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-gray-50 border-gray-100 rounded-xl py-3 pl-12 pr-4 focus:ring-2 focus:ring-careem-primary focus:outline-none"
-                    placeholder="name@example.com"
-                  />
-                </div>
+          <form className="mt-7 space-y-5" onSubmit={handleSubmit}>
+            {!isLogin && (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRole(UserRole.CUSTOMER)}
+                  className={[
+                    'rounded-xl py-2.5 text-xs font-semibold transition border',
+                    role === UserRole.CUSTOMER
+                      ? 'bg-[#13213A] text-slate-100 border-[#1B2D4F]'
+                      : 'bg-[#0B1220]/40 text-slate-400 border-white/10 hover:bg-white/5 hover:text-slate-200'
+                  ].join(' ')}
+                >
+                  Я заказчик
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRole(UserRole.EXECUTOR)}
+                  className={[
+                    'rounded-xl py-2.5 text-xs font-semibold transition border',
+                    role === UserRole.EXECUTOR
+                      ? 'bg-[#13213A] text-slate-100 border-[#1B2D4F]'
+                      : 'bg-[#0B1220]/40 text-slate-400 border-white/10 hover:bg-white/5 hover:text-slate-200'
+                  ].join(' ')}
+                >
+                  Я помощник
+                </button>
               </div>
+            )}
 
+            {!isLogin && (
               <div>
-                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Пароль</label>
-                <div className="relative">
-                  <i className="fas fa-lock absolute left-4 top-3.5 text-gray-300"></i>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-gray-50 border-gray-100 rounded-xl py-3 pl-12 pr-4 focus:ring-2 focus:ring-careem-primary focus:outline-none"
-                    placeholder="••••••••"
-                  />
-                </div>
+                <label className="block text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-2">Имя</label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full rounded-xl bg-[#0B1220]/60 border border-white/10 py-3 px-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-careem-primary/60"
+                  placeholder="Ваше имя"
+                />
               </div>
+            )}
 
-              {!isLogin && (
-                <div className="flex items-start">
-                  <div className="flex items-center h-5">
-                    <input
-                      id="terms"
-                      name="terms"
-                      type="checkbox"
-                      required
-                      checked={termsAccepted}
-                      onChange={(e) => setTermsAccepted(e.target.checked)}
-                      className="focus:ring-careem-primary h-4 w-4 text-careem-primary border-gray-300 rounded"
-                    />
-                  </div>
-                  <div className="ml-3 text-xs">
-                    <label htmlFor="terms" className="font-medium text-gray-700">
-                      Я согласен с <Link to="/terms" className="text-careem-primary hover:text-green-700">условиями публичной оферты</Link>
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              <button className="w-full bg-careem-primary hover:bg-green-700 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-green-100 mt-4">
-                {isLogin ? 'Войти' : 'Создать аккаунт'}
-              </button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <button
-                onClick={() => setIsLogin(!isLogin)}
-                className="text-sm text-careem-primary hover:text-green-800 font-medium"
-              >
-                {isLogin ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти'}
-              </button>
+            <div>
+              <label className="block text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-2">Электронная почта</label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-xl bg-[#0B1220]/60 border border-white/10 py-3 px-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-careem-primary/60"
+                placeholder="name@example.com"
+              />
             </div>
 
-            <div className="mt-8 pt-8 border-t border-gray-100 text-center">
-              <p className="text-xs text-gray-400 mb-4">Или войти через</p>
-              <div className="flex justify-center gap-4">
-                <button onClick={handleTelegramLogin} type="button" className="w-10 h-10 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-[#24A1DE] hover:bg-gray-50 transition"><i className="fab fa-telegram-plane"></i></button>
-                <button onClick={handleGoogleLogin} type="button" className="w-10 h-10 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-red-500 hover:bg-gray-50 transition"><i className="fab fa-google"></i></button>
+            <div>
+              <label className="block text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-2">Пароль</label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-xl bg-[#0B1220]/60 border border-white/10 py-3 px-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-careem-primary/60"
+                placeholder="••••••••"
+              />
+            </div>
+
+            {!isLogin && (
+              <div className="flex items-start gap-3">
+                <input
+                  id="terms"
+                  name="terms"
+                  type="checkbox"
+                  required
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-white/20 bg-[#0B1220]/60 text-careem-primary focus:ring-careem-primary/60"
+                />
+                <label htmlFor="terms" className="text-xs text-slate-300 leading-relaxed">
+                  Я согласен с <Link to="/terms" className="text-careem-primary hover:text-[#255EE6]">условиями публичной оферты</Link>
+                </label>
               </div>
+            )}
+
+            <button
+              disabled={isLoading}
+              className="w-full rounded-xl bg-careem-primary hover:bg-[#255EE6] disabled:opacity-60 disabled:hover:bg-careem-primary transition text-white font-semibold py-3.5 shadow-lg shadow-[#2D6BFF]/20"
+            >
+              {isLogin ? 'Войти в панель' : 'Создать аккаунт'}
+            </button>
+          </form>
+
+          <div className="mt-8">
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-white/10"></div>
+              <div className="text-[10px] font-bold tracking-widest text-slate-500 uppercase">или продолжить с</div>
+              <div className="h-px flex-1 bg-white/10"></div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                onClick={handleTelegramLogin}
+                type="button"
+                disabled={isLoading}
+                className="h-11 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition flex items-center justify-center disabled:opacity-60"
+                title="Telegram"
+              >
+                <i className="fab fa-telegram-plane text-[#2D6BFF] text-lg"></i>
+              </button>
+              <button
+                onClick={handleGoogleLogin}
+                type="button"
+                disabled={isLoading}
+                className="h-11 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition flex items-center justify-center disabled:opacity-60"
+                title="Google"
+              >
+                <i className="fab fa-google text-red-400 text-lg"></i>
+              </button>
             </div>
           </div>
         </div>
-        {!isLogin && (
-          <p className="mt-8 text-center text-[10px] text-gray-400 leading-relaxed px-4">
-            Регистрируясь, вы подтверждаете свое согласие с <Link to="/terms" className="underline hover:text-gray-500">публичной офертой</Link> и правилами обработки персональных данных.
-          </p>
-        )}
       </div>
     </div>
   );

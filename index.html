@@ -12,11 +12,11 @@
           extend: {
             colors: {
               careem: {
-                dark: '#004F32', // Deep forest green (Brand)
-                primary: '#004F32', // Main action button
-                accent: '#00EB79', // Bright green for icons/highlights
-                light: '#E6F7F1', // Light background
-                gray: '#F3F4F6', // Standard background
+                dark: '#070B14',
+                primary: '#2D6BFF',
+                accent: '#2D6BFF',
+                light: '#111A2B',
+                gray: '#0B1220',
               }
             },
             fontFamily: {
@@ -78,9 +78,22 @@
           color: white;
           border-color: #ffffff;
       }
+
+      input[type="date"],
+      input[type="time"] {
+        color-scheme: dark;
+      }
+
+      input[type="date"]::-webkit-calendar-picker-indicator,
+      input[type="time"]::-webkit-calendar-picker-indicator {
+        opacity: 0.7;
+        filter: invert(0.78);
+        transform: scale(1.32);
+        cursor: pointer;
+      }
     </style>
 </head>
-  <body class="bg-gray-50 text-gray-900">
+  <body class="bg-careem-dark text-slate-100">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

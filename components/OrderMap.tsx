@@ -5,12 +5,9 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import L from 'leaflet';
 
 // Fix for default Leaflet markers (if not already handled globally)
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-
 let DefaultIcon = L.icon({
-    iconUrl: icon,
-    shadowUrl: iconShadow,
+    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
     iconSize: [25, 41],
     iconAnchor: [12, 41]
 });
@@ -28,7 +25,7 @@ const MapInvalidator = () => {
   return null;
 };
 
-const OrderMap = ({ order }: { order: Order }) => {
+const OrderMap = ({ order, hideInfo = false }: { order: Order; hideInfo?: boolean }) => {
   const { user } = useAuth();
   const [routePositions, setRoutePositions] = useState<any[]>([]);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
@@ -117,13 +114,13 @@ const OrderMap = ({ order }: { order: Order }) => {
                     
                     <Marker position={[order.locationFrom.lat, order.locationFrom.lng]} icon={iconA}>
                         <Popup>
-                            <strong>Точка А</strong>: {order.locationFrom.address}
+                            <strong>Точка А</strong>{hideInfo ? '' : `: ${order.locationFrom.address}`}
                         </Popup>
                     </Marker>
                     
                     <Marker position={[order.locationTo.lat, order.locationTo.lng]} icon={iconB}>
                         <Popup>
-                            <strong>Точка Б</strong>: {order.locationTo.address}
+                            <strong>Точка Б</strong>{hideInfo ? '' : `: ${order.locationTo.address}`}
                         </Popup>
                     </Marker>
 
@@ -150,7 +147,7 @@ const OrderMap = ({ order }: { order: Order }) => {
                   </div>
               )}
          </div>
-         {user?.role !== UserRole.EXECUTOR && (
+         {!hideInfo && user?.role !== UserRole.EXECUTOR && (
          <div className="mt-4 bg-white p-5 rounded-2xl shadow-lg border border-gray-100 relative overflow-hidden">
               <div className="flex flex-col gap-6 relative">
                   {/* Vertical connecting line */}
@@ -206,14 +203,16 @@ const OrderMap = ({ order }: { order: Order }) => {
                     />
                     <MapInvalidator />
                     <Marker position={[order.generalLocation.lat, order.generalLocation.lng]}>
-                         <Popup>Место встречи: {order.generalLocation.address}</Popup>
+                         <Popup>{hideInfo ? 'Место встречи' : `Место встречи: ${order.generalLocation.address}`}</Popup>
                     </Marker>
                 </MapContainer>
          </div>
-         <div className="mt-3 bg-gray-50 p-3 rounded-lg text-sm text-gray-700 flex items-start gap-2 border border-gray-100">
-              <i className="fas fa-map-marker-alt text-red-500 mt-1 shrink-0"></i>
-              <span>{order.generalLocation.address || 'Место встречи'}</span>
-          </div>
+         {!hideInfo && (
+           <div className="mt-3 bg-gray-50 p-3 rounded-lg text-sm text-gray-700 flex items-start gap-2 border border-gray-100">
+                <i className="fas fa-map-marker-alt text-red-500 mt-1 shrink-0"></i>
+                <span>{order.generalLocation.address || 'Место встречи'}</span>
+            </div>
+         )}
        </div>
      );
   }

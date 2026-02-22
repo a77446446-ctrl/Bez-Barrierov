@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { User, UserRole, Order, OrderStatus, Review, Location, Notification } from '../types';
 import { MOCK_ORDERS, SERVICE_TYPES } from '../constants';
@@ -9,6 +9,29 @@ import L from 'leaflet';
 import OrderMap from '../components/OrderMap';
 
 // OrderMap component removed (imported from components/OrderMap)
+
+const getOrderDateTimeMs = (order: Order) => {
+  if (!order.date || !order.time) return null;
+  const [hoursRaw, minutesRaw] = order.time.split(':');
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+
+  const base = new Date(`${order.date}T00:00:00`);
+  if (Number.isNaN(base.getTime())) return null;
+  base.setHours(hours, minutes, 0, 0);
+  return base.getTime();
+};
+
+const cleanupExpiredOpenOrders = (orderList: Order[]) => {
+  const now = Date.now();
+  return orderList.filter((o) => {
+    if (o.status !== OrderStatus.OPEN) return true;
+    const dt = getOrderDateTimeMs(o);
+    if (dt === null) return true;
+    return dt > now;
+  });
+};
 
 const MapInvalidator = () => {
   const map = useMap();
@@ -56,7 +79,11 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const { updateUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<'orders' | 'profile' | 'subscription'>('orders');
+  const ordersHeaderRef = useRef<HTMLHeadingElement | null>(null);
+  const profileEditorRef = useRef<HTMLDivElement | null>(null);
+  const verificationTimerRef = useRef<number | null>(null);
 
   // Initialize orders from localStorage or fall back to MOCK_ORDERS
   const [orders, setOrders] = useState<Order[]>(() => {
@@ -88,6 +115,26 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   );
   const [showOpenOrders, setShowOpenOrders] = useState(false);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    const open = params.get('open');
+
+    if (user.role === UserRole.EXECUTOR && open === '1') {
+      setActiveTab('orders');
+      setShowOpenOrders(true);
+      return;
+    }
+
+    if (tab === 'profile' || tab === 'subscription' || tab === 'orders') {
+      setActiveTab(tab);
+      if (tab === 'orders') setShowOpenOrders(false);
+      return;
+    }
+    setActiveTab('orders');
+    setShowOpenOrders(false);
+  }, [location.search, user.role]);
+
   // Profile State
   const [locationCoords, setLocationCoords] = useState<Location | undefined>(user.locationCoordinates);
   const [locationAddress, setLocationAddress] = useState<string>(user.locationCoordinates?.address || '');
@@ -95,6 +142,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState(user.avatar);
   const [vehiclePhotoPreview, setVehiclePhotoPreview] = useState(user.vehiclePhoto);
+  const [profileDescription, setProfileDescription] = useState<string>(
+    user.description === 'Новый пользователь' ? '' : (user.description || '')
+  );
+  const [profileVerificationStatus, setProfileVerificationStatus] = useState<User['profileVerificationStatus']>(
+    user.profileVerificationStatus || 'none'
+  );
+
+  useEffect(() => {
+    setProfileVerificationStatus(user.profileVerificationStatus || 'none');
+  }, [user.profileVerificationStatus]);
 
   // Helper for map events handled inline
 
@@ -102,13 +159,73 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const handleTabChange = (tab: 'orders' | 'profile' | 'subscription') => {
     if (hasUnsavedChanges) {
       if (!window.confirm('У вас есть несохраненные изменения. Вы уверены, что хотите уйти?')) {
-        return;
+        return false;
       }
       setHasUnsavedChanges(false);
     }
     setActiveTab(tab);
     if (tab === 'orders') setShowOpenOrders(false);
+    return true;
   };
+
+  const scrollToElement = (element: HTMLElement | null) => {
+    if (!element) return;
+    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleGoToOrders = () => {
+    if (!handleTabChange('orders')) return;
+    window.setTimeout(() => {
+      scrollToElement(ordersHeaderRef.current);
+    }, 60);
+  };
+
+  const handleGoToProfile = () => {
+    if (!handleTabChange('profile')) return;
+    window.setTimeout(() => {
+      scrollToElement(profileEditorRef.current);
+    }, 60);
+  };
+
+  const isExecutor = user.role === UserRole.EXECUTOR;
+  const hasWorkPlace = !!locationCoords && (coverageRadius || 0) > 0;
+  const hasAtLeastOneService = servicesState.some((s) => s.enabled);
+  const hasAbout = profileDescription.trim().length > 0;
+  const canPublishProfile = !isExecutor || (hasWorkPlace && hasAtLeastOneService && hasAbout && hasUnsavedChanges);
+
+  useEffect(() => {
+    return () => {
+      if (verificationTimerRef.current !== null) {
+        window.clearTimeout(verificationTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isExecutor) return;
+    if (hasUnsavedChanges && profileVerificationStatus === 'verified') {
+      setProfileVerificationStatus('none');
+    }
+  }, [hasUnsavedChanges, isExecutor, profileVerificationStatus]);
+
+  useEffect(() => {
+    if (user.role !== UserRole.EXECUTOR) return;
+
+    const cleanup = () => {
+      setOrders((current) => {
+        const cleaned = cleanupExpiredOpenOrders(current);
+        if (cleaned.length !== current.length) {
+          localStorage.setItem('bez_barrierov_orders', JSON.stringify(cleaned));
+          return cleaned;
+        }
+        return current;
+      });
+    };
+
+    cleanup();
+    const intervalId = window.setInterval(cleanup, 30_000);
+    return () => window.clearInterval(intervalId);
+  }, [user.role]);
 
   const myOrders = orders.filter(o => {
     if (user.role === UserRole.CUSTOMER) {
@@ -129,6 +246,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   });
 
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
+  const executorAssignedCount = user.role === UserRole.EXECUTOR
+    ? orders.filter(o =>
+        o.executorId === user.id &&
+        ![OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.REJECTED].includes(o.status)
+      ).length
+    : 0;
+
+  const executorOpenCount = user.role === UserRole.EXECUTOR ? openOrders.length : 0;
 
   // Combined list for display based on view mode
   const allDisplayedOrders = user.role === UserRole.EXECUTOR && showOpenOrders ? openOrders : myOrders;
@@ -167,12 +293,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
     if (rejectingOrderId && rejectionReason.trim()) {
       const updatedOrders = orders.map(o => {
         if (o.id === rejectingOrderId) {
-          const isOpen = o.allowOpenSelection !== false; // Default to true if undefined (legacy) or explicitly true
+          const canBecomeOpen = o.allowOpenSelection === true;
           return {
             ...o,
-            status: isOpen ? OrderStatus.OPEN : OrderStatus.REJECTED,
+            status: canBecomeOpen ? OrderStatus.OPEN : OrderStatus.REJECTED,
             rejectionReason: rejectionReason,
-            executorId: isOpen ? undefined : o.executorId
+            executorId: canBecomeOpen ? undefined : o.executorId,
+            responses: canBecomeOpen ? [] : o.responses
           };
         }
         return o;
@@ -284,21 +411,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
     }
   };
 
-  const handleRespondToOrder = (orderId: string) => {
+  const handleTakeOpenOrder = (orderId: string) => {
     const updatedOrders = orders.map(o => {
-      if (o.id === orderId) {
-        const responses = o.responses || [];
-        if (!responses.includes(user.id)) {
-          return {
-            ...o,
-            responses: [...responses, user.id]
-          };
-        }
-      }
-      return o;
+      if (o.id !== orderId) return o;
+      if (o.status !== OrderStatus.OPEN) return o;
+      return {
+        ...o,
+        status: OrderStatus.CONFIRMED,
+        executorId: user.id,
+        responses: []
+      };
     });
     setOrders(updatedOrders);
     localStorage.setItem('bez_barrierov_orders', JSON.stringify(updatedOrders));
+    onUpdateStatus(orderId, OrderStatus.CONFIRMED);
   };
 
   const handleDeleteOrder = (orderId: string) => {
@@ -531,13 +657,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
   const getStatusColor = (status: OrderStatus) => {
     switch (status) {
-      case OrderStatus.CONFIRMED: return 'text-green-600 bg-green-50';
-      case OrderStatus.PENDING: return 'text-amber-600 bg-amber-50';
-      case OrderStatus.OPEN: return 'text-careem-primary bg-green-50';
-      case OrderStatus.COMPLETED: return 'text-careem-primary bg-green-50';
-      case OrderStatus.CANCELLED: return 'text-red-600 bg-red-50';
-      case OrderStatus.REJECTED: return 'text-red-600 bg-red-50';
-      default: return 'text-gray-600 bg-gray-50';
+      case OrderStatus.CONFIRMED: return 'text-green-600';
+      case OrderStatus.PENDING: return 'text-amber-600';
+      case OrderStatus.OPEN: return 'text-careem-primary';
+      case OrderStatus.COMPLETED: return 'text-careem-primary';
+      case OrderStatus.CANCELLED: return 'text-red-600';
+      case OrderStatus.REJECTED: return 'text-red-600';
+      default: return 'text-gray-600';
     }
   };
 
@@ -574,6 +700,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
   // Pending Subscription View for Executor (Optional, but good UX)
   if (user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'pending') {
+    const requestedCustomer = user.subscriptionRequestToCustomerId
+      ? allUsers.find(u => u.id === user.subscriptionRequestToCustomerId)
+      : null;
+
     return (
       <div className="max-w-7xl mx-auto px-4 py-8 min-h-[80vh] flex items-center justify-center">
         <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 max-w-md w-full text-center">
@@ -581,7 +711,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
             <i className="fas fa-clock text-3xl text-blue-500"></i>
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">Ожидание подтверждения</h2>
-          <p className="text-gray-500">Заказчик должен подтвердить ваш запрос на подписку.</p>
+          <p className="text-gray-500">
+            {requestedCustomer ? `Вы отправили запрос на подписку заказчику ${requestedCustomer.name}.` : 'Вы отправили запрос на подписку заказчику.'}
+          </p>
+          <p className="text-gray-500 mt-2">Заказчик должен подтвердить ваш запрос на подписку.</p>
         </div>
       </div>
     );
@@ -713,20 +846,28 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
             <nav className="space-y-1">
               <button
-                onClick={() => handleTabChange('orders')}
-                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition relative ${activeTab === 'orders' && !showOpenOrders ? 'bg-careem-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                onClick={handleGoToOrders}
+                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition relative border ${activeTab === 'orders' && !showOpenOrders ? 'bg-gradient-to-br from-careem-dark to-[#003822] text-white border-careem-dark/50 shadow-lg' : 'bg-gradient-to-br from-careem-dark/40 to-[#003822]/40 text-gray-700 border-gray-100 hover:from-careem-dark/55 hover:to-[#003822]/55 hover:shadow-md'}`}
               >
-                <i className="fas fa-home mr-3"></i> Главная
-                {user.role === UserRole.EXECUTOR && user.subscriptionStatus !== 'active' && (openOrders.length > 0 || myOrders.some(o => o.status !== OrderStatus.COMPLETED && o.status !== OrderStatus.CANCELLED && o.status !== OrderStatus.REJECTED)) && (
-                  <span className="absolute top-2 right-2 flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                  </span>
+                <i className="fas fa-home mr-3"></i> Мои заказы
+                {user.role === UserRole.EXECUTOR && user.subscriptionStatus !== 'active' && (executorAssignedCount > 0 || executorOpenCount > 0) && (
+                  <div className="absolute top-2 right-3 flex items-center gap-1">
+                    {executorAssignedCount > 0 && (
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-500 text-white text-[11px] font-bold">
+                        {executorAssignedCount}
+                      </span>
+                    )}
+                    {executorOpenCount > 0 && (
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white text-[11px] font-bold">
+                        {executorOpenCount}
+                      </span>
+                    )}
+                  </div>
                 )}
               </button>
               <button
-                onClick={() => handleTabChange('profile')}
-                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition ${activeTab === 'profile' ? 'bg-careem-primary text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                onClick={handleGoToProfile}
+                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition border ${activeTab === 'profile' ? 'bg-gradient-to-br from-careem-dark to-[#003822] text-white border-careem-dark/50 shadow-lg' : 'bg-gradient-to-br from-careem-dark/40 to-[#003822]/40 text-gray-700 border-gray-100 hover:from-careem-dark/55 hover:to-[#003822]/55 hover:shadow-md'}`}
               >
                 <i className="fas fa-user-circle mr-3"></i> Профиль
               </button>
@@ -735,10 +876,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   onClick={() => user.subscriptionStatus !== 'active' && handleTabChange('subscription')}
                   disabled={user.subscriptionStatus === 'active'}
                   className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition ${activeTab === 'subscription'
-                      ? 'bg-careem-primary text-white'
+                      ? 'bg-gradient-to-br from-careem-dark to-[#003822] text-white border border-careem-dark/50 shadow-lg'
                       : user.subscriptionStatus === 'active'
-                        ? 'text-gray-400 cursor-not-allowed opacity-50'
-                        : 'text-gray-600 hover:bg-gray-50'
+                        ? 'text-gray-400 cursor-not-allowed opacity-50 bg-gray-50 border border-gray-100'
+                        : 'bg-gradient-to-br from-careem-dark/40 to-[#003822]/40 text-gray-700 border border-gray-100 hover:from-careem-dark/55 hover:to-[#003822]/55 hover:shadow-md'
                     }`}
                 >
                   <i className="fas fa-rocket mr-3"></i> Продвижение
@@ -753,6 +894,77 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
               </button>
             </nav>
           </div>
+
+          {user.role === UserRole.CUSTOMER && (
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6">
+              <h4 className="font-bold text-gray-900">Инструкция</h4>
+              <p className="mt-2 text-sm text-gray-500 leading-relaxed">
+                Простые шаги, чтобы оформить заявку и отслеживать выполнение.
+              </p>
+
+              <div className="mt-4 space-y-2">
+                <details className="rounded-xl border border-gray-100 bg-gray-50/60">
+                  <summary className="cursor-pointer list-none px-4 py-3 flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-green-100 text-careem-primary flex items-center justify-center shrink-0">
+                      <i className="fas fa-id-card"></i>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900">Войдите или зарегистрируйтесь</p>
+                      <p className="mt-1 text-xs text-gray-500">Выберите роль: заказчик.</p>
+                    </div>
+                  </summary>
+                  <div className="px-4 pb-4 text-xs text-gray-600 leading-relaxed">
+                    После входа вам станет доступен личный кабинет, история заявок и создание новых заказов.
+                  </div>
+                </details>
+
+                <details className="rounded-xl border border-gray-100 bg-gray-50/60">
+                  <summary className="cursor-pointer list-none px-4 py-3 flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-green-100 text-careem-primary flex items-center justify-center shrink-0">
+                      <i className="fas fa-clipboard-list"></i>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900">Опишите задачу</p>
+                      <p className="mt-1 text-xs text-gray-500">Что нужно сделать, когда и где.</p>
+                    </div>
+                  </summary>
+                  <div className="px-4 pb-4 text-xs text-gray-600 leading-relaxed">
+                    Укажите время, длительность и особые требования (коляска, лифт, помощь с сумками).
+                  </div>
+                </details>
+
+                <details className="rounded-xl border border-gray-100 bg-gray-50/60">
+                  <summary className="cursor-pointer list-none px-4 py-3 flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-green-100 text-careem-primary flex items-center justify-center shrink-0">
+                      <i className="fas fa-map-location-dot"></i>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900">Укажите маршрут</p>
+                      <p className="mt-1 text-xs text-gray-500">Адреса и удобный формат на карте.</p>
+                    </div>
+                  </summary>
+                  <div className="px-4 pb-4 text-xs text-gray-600 leading-relaxed">
+                    Для трансфера добавьте точку А и точку Б. Для встречи достаточно одной точки и ориентира.
+                  </div>
+                </details>
+
+                <details className="rounded-xl border border-gray-100 bg-gray-50/60">
+                  <summary className="cursor-pointer list-none px-4 py-3 flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-green-100 text-careem-primary flex items-center justify-center shrink-0">
+                      <i className="fas fa-circle-check"></i>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900">Следите за статусом</p>
+                      <p className="mt-1 text-xs text-gray-500">Подтверждение, выполнение и завершение заявки.</p>
+                    </div>
+                  </summary>
+                  <div className="px-4 pb-4 text-xs text-gray-600 leading-relaxed">
+                    В кабинете видно, на каком этапе заявка: ожидает отклика, в работе, завершена или отменена.
+                  </div>
+                </details>
+              </div>
+            </div>
+          )}
 
           <div className="bg-gradient-to-br from-careem-dark to-[#003822] p-6 rounded-2xl text-white shadow-xl overflow-hidden relative group border border-careem-dark/50">
             <div className="relative z-10">
@@ -818,46 +1030,51 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
           {activeTab === 'orders' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'active' ? 'Статус подписки' : showOpenOrders ? 'Доступные заказы' : 'Мои заказы'}
+                <h2 ref={ordersHeaderRef} className="text-2xl font-bold text-slate-100">
+                  {showOpenOrders ? 'Доступные заказы' : user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'active' ? 'Статус подписки' : 'Мои заказы'}
                 </h2>
-                {!(user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'active') && (
+                {!(user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'active') || showOpenOrders ? (
                   <div className="flex gap-2">
-                    <button className="px-3 py-1.5 bg-white border rounded-lg text-xs font-medium hover:bg-gray-50">Фильтры</button>
+                    <button className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs font-semibold text-slate-200 hover:bg-white/10 transition">Фильтры</button>
                   </div>
-                )}
+                ) : null}
               </div>
 
-              {user.role === UserRole.EXECUTOR && user.subscriptionStatus !== 'active' && openOrders.length > 0 && !showOpenOrders && (
+              {user.role === UserRole.EXECUTOR && openOrders.length > 0 && !showOpenOrders && (
                 <div
-                  onClick={() => setShowOpenOrders(true)}
-                  className="bg-careem-light border border-green-100 p-4 rounded-xl flex items-center justify-between cursor-pointer hover:bg-green-100 transition"
+                  onClick={() => {
+                    navigate('/orders/open');
+                  }}
+                  className="bg-[#0B1220]/60 border border-white/10 p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-white/5 transition shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-careem-primary">
+                    <div className="w-10 h-10 bg-[#13213A] rounded-2xl flex items-center justify-center text-careem-primary border border-[#1B2D4F]">
                       <i className="fas fa-bell"></i>
                     </div>
                     <div>
-                      <h4 className="font-bold text-careem-dark">Доступны новые заказы</h4>
-                      <p className="text-xs text-green-700">Всего {openOrders.length} заказов ожидают исполнителя</p>
+                      <h4 className="font-extrabold text-slate-100">Доступны новые заказы</h4>
+                      <p className="text-xs text-slate-400">Всего {openOrders.length} заказов ожидают исполнителя</p>
                     </div>
                   </div>
-                  <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-careem-primary shadow-sm">
+                  <div className="w-9 h-9 bg-white/5 rounded-2xl flex items-center justify-center text-slate-200 border border-white/10">
                     <i className="fas fa-chevron-right"></i>
                   </div>
                 </div>
               )}
 
-              {user.role === UserRole.EXECUTOR && user.subscriptionStatus !== 'active' && showOpenOrders && (
+              {user.role === UserRole.EXECUTOR && showOpenOrders && (
                 <button
-                  onClick={() => setShowOpenOrders(false)}
-                  className="mb-4 text-sm text-gray-500 hover:text-gray-900 flex items-center gap-2"
+                  onClick={() => {
+                    setShowOpenOrders(false);
+                    navigate('/dashboard');
+                  }}
+                  className="mb-4 text-sm text-slate-400 hover:text-slate-100 flex items-center gap-2 transition"
                 >
                   <i className="fas fa-arrow-left"></i> Назад к моим заказам
                 </button>
               )}
 
-              {user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'active' && user.subscriptionEndDate ? (
+              {user.role === UserRole.EXECUTOR && !showOpenOrders && user.subscriptionStatus === 'active' && user.subscriptionEndDate ? (
                 (() => {
                   const endDate = new Date(user.subscriptionEndDate);
                   const now = new Date();
@@ -922,40 +1139,46 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 <div className="grid grid-cols-1 gap-4">
                   {/* Active Orders */}
                   {activeOrders.map(order => (
-                    <div key={order.id} className={`${user.role === UserRole.EXECUTOR && order.executorId === user.id ? 'bg-green-50/30 border-green-200' : 'bg-white border-gray-100'} p-0 rounded-3xl shadow-sm border overflow-hidden hover:shadow-md transition-shadow duration-300`}>
+                    <div key={order.id} className={`${user.role === UserRole.EXECUTOR && order.executorId === user.id ? 'bg-[#0B1220]/60 border-[#1B2D4F] ring-1 ring-[#13213A]' : 'bg-[#0B1220]/60 border-white/10'} p-0 rounded-3xl shadow-[0_18px_60px_rgba(0,0,0,0.35)] border overflow-hidden hover:bg-[#0B1220]/70 transition duration-300 backdrop-blur-xl`}>
                       {/* Inner Card Container with Inner Shadow */}
-                      <div className="m-2 p-5 rounded-2xl bg-white shadow-[inset_0_2px_6px_rgba(0,0,0,0.06)] border border-gray-50/50">
+                      <div className="m-2 p-5 rounded-2xl bg-[#0B1220]/70 border border-white/10 relative">
 
                         {/* Header: Icon + Type + Date */}
                         <div className="flex justify-between items-start mb-6">
                           <div className="flex items-center gap-4">
-                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${user.role === UserRole.EXECUTOR && order.executorId === user.id ? 'bg-green-100 text-careem-dark' : 'bg-careem-light text-careem-primary'}`}>
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${user.role === UserRole.EXECUTOR && order.executorId === user.id ? 'bg-careem-primary/15 text-careem-primary border-careem-primary/20' : 'bg-[#13213A] text-careem-primary border-[#1B2D4F]'}`}>
                               <i className="fas fa-hand-holding-heart text-2xl"></i>
                             </div>
                             <div>
-                              <h4 className="font-extrabold text-gray-900 text-lg leading-tight">{order.serviceType}</h4>
-                              <p className="text-xs font-medium text-gray-400 mt-1 flex items-center gap-2">
-                                <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-500">{order.date}</span>
-                                <span>{order.time}</span>
+                              <h4 className="font-extrabold text-slate-100 text-lg leading-tight">{order.serviceType}</h4>
+                              <p className="text-xs font-medium text-slate-400 mt-1 flex items-center gap-2">
+                                <span className="bg-white/5 px-2 py-0.5 rounded border border-white/10 text-slate-300">{order.date}</span>
+                                <span className="text-slate-300">{order.time}</span>
                               </p>
                             </div>
                           </div>
-                          <span className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm ${getStatusColor(order.status)}`}>
+                          <span
+                            className={[
+                              'absolute top-4 right-4 text-[11px] leading-none font-black uppercase tracking-wide whitespace-nowrap drop-shadow-[0_6px_18px_rgba(0,0,0,0.55)]',
+                              getStatusColor(order.status),
+                              order.status === OrderStatus.PENDING ? 'animate-pulse' : ''
+                            ].join(' ')}
+                          >
                             {getStatusLabel(order.status)}
                           </span>
                         </div>
 
                         {/* Body: Price & Info */}
-                        <div className="flex items-center justify-between bg-gray-50/50 rounded-xl p-4 border border-gray-100 mb-6">
+                        <div className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/10 mb-6">
                           <div>
-                            <p className="text-[10px] uppercase text-gray-400 font-bold mb-1 tracking-wider">Стоимость услуги</p>
-                            <p className="text-2xl font-black text-gray-900">{order.totalPrice} <span className="text-sm font-medium text-gray-400">₽</span></p>
+                            <p className="text-[10px] uppercase text-slate-400 font-bold mb-1 tracking-wider">Стоимость услуги</p>
+                            <p className="text-2xl font-black text-slate-100">{order.totalPrice} <span className="text-sm font-medium text-slate-400">₽</span></p>
                           </div>
-                          <div className="h-8 w-px bg-gray-200 mx-4"></div>
+                          <div className="h-8 w-px bg-white/10 mx-4"></div>
                           <div className="text-right">
                             <button
                               onClick={() => setSelectedOrderDetails(order)}
-                              className="text-xs font-bold text-careem-primary hover:text-careem-dark transition flex items-center gap-1 group"
+                              className="text-xs font-bold text-careem-primary hover:text-white transition flex items-center gap-1 group"
                             >
                               Подробнее <i className="fas fa-arrow-right transform group-hover:translate-x-1 transition-transform"></i>
                             </button>
@@ -963,13 +1186,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                         </div>
 
                         {/* Actions Footer */}
-                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100">
+                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-white/10">
                           {user.role === UserRole.EXECUTOR && order.status === OrderStatus.PENDING && (
                             <>
-                              <button onClick={() => handleUpdateOrderStatus(order.id, OrderStatus.CONFIRMED)} className="flex-1 bg-green-600 text-white py-2.5 rounded-xl hover:bg-green-700 transition font-bold text-sm shadow-sm shadow-green-200" title="Подтвердить">
+                              <button onClick={() => handleUpdateOrderStatus(order.id, OrderStatus.CONFIRMED)} className="flex-1 bg-careem-primary text-white py-2.5 rounded-2xl hover:bg-[#255EE6] transition font-bold text-sm shadow-lg shadow-[#2D6BFF]/20" title="Подтвердить">
                                 <i className="fas fa-check mr-2"></i> Принять
                               </button>
-                              <button onClick={() => setRejectingOrderId(order.id)} className="flex-1 bg-white text-red-500 border border-red-100 py-2.5 rounded-xl hover:bg-red-50 transition font-bold text-sm" title="Отклонить">
+                              <button onClick={() => setRejectingOrderId(order.id)} className="flex-1 bg-white/5 text-red-300 border border-red-500/20 py-2.5 rounded-2xl hover:bg-red-500/10 transition font-bold text-sm" title="Отклонить">
                                 <i className="fas fa-times mr-2"></i> Отклонить
                               </button>
                             </>
@@ -977,14 +1200,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
                           {user.role === UserRole.EXECUTOR && order.status === OrderStatus.OPEN && (
                             <button
-                              onClick={() => handleRespondToOrder(order.id)}
-                              disabled={order.responses?.includes(user.id)}
-                              className={`flex-1 py-3 rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center gap-2 ${order.responses?.includes(user.id)
-                                  ? 'bg-green-50 text-green-700 cursor-default border border-green-100'
-                                  : 'bg-careem-primary text-white hover:bg-careem-dark shadow-green-200'
-                                }`}
+                              onClick={() => handleTakeOpenOrder(order.id)}
+                              className="flex-1 py-3 rounded-xl font-bold text-sm shadow-md transition flex items-center justify-center gap-2 bg-careem-primary text-white hover:bg-[#255EE6] shadow-lg shadow-[#2D6BFF]/20"
                             >
-                              {order.responses?.includes(user.id) ? <><i className="fas fa-check-circle"></i> Вы откликнулись</> : 'Откликнуться на заказ'}
+                              <i className="fas fa-hand-point-up"></i> Взять в работу
                             </button>
                           )}
 
@@ -1012,7 +1231,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                   handleDeleteOrder(order.id);
                                 }
                               }}
-                              className="ml-auto w-10 h-10 flex items-center justify-center bg-gray-50 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition border border-gray-100"
+                              className="ml-auto w-10 h-10 flex items-center justify-center bg-white/5 text-slate-400 hover:text-red-300 hover:bg-red-500/10 rounded-2xl transition border border-white/10"
                               title="Удалить заказ"
                             >
                               <i className="fas fa-trash-alt"></i>
@@ -1024,11 +1243,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                         <div className="space-y-4 mt-2">
                           {/* Address for Open Orders Only (City Only) */}
                           {(showOpenOrders || user.role === UserRole.CUSTOMER) && (
-                            <div className="w-full mt-2 p-3 bg-gray-50/50 rounded-xl border border-gray-100/50 flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-careem-primary shadow-sm border border-gray-100">
+                            <div className="w-full mt-2 p-3 bg-white/5 rounded-2xl border border-white/10 flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-2xl bg-[#13213A] flex items-center justify-center text-careem-primary border border-[#1B2D4F]">
                                 <i className="fas fa-map-marker-alt text-xs"></i>
                               </div>
-                              <span className="font-medium text-gray-600 text-sm line-clamp-1">
+                              <span className="font-medium text-slate-300 text-sm line-clamp-1">
                                 {order.locationFrom
                                   ? formatAddress(order.locationFrom.address).split(',')[0]
                                   : order.generalLocation
@@ -1048,8 +1267,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
                           {/* Voice Message Player */}
                           {order.voiceMessageUrl && (
-                            <div className="w-full mt-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                              <p className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-2">
+                            <div className="w-full mt-3 p-3 bg-white/5 rounded-2xl border border-white/10">
+                              <p className="text-xs font-bold text-slate-400 mb-2 flex items-center gap-2">
                                 <i className="fas fa-microphone text-red-500"></i> Голосовое сообщение
                               </p>
                               <audio src={order.voiceMessageUrl} controls className="w-full h-8" />
@@ -1065,26 +1284,26 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                               return (
                                 <div
                                   onClick={() => setViewingCustomer(customer)}
-                                  className="w-full mt-4 p-4 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-green-50 hover:border-green-100 transition group"
+                                  className="w-full mt-4 p-4 bg-white/5 rounded-2xl border border-white/10 cursor-pointer hover:bg-white/10 transition group"
                                 >
                                   <div className="flex items-center gap-4">
                                     <div className="shrink-0">
                                       <img
                                         src={customer.avatar || `https://ui-avatars.com/api/?name=${customer.name}`}
                                         alt={customer.name}
-                                        className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm"
+                                        className="w-12 h-12 rounded-2xl object-cover border border-white/10 shadow-sm"
                                       />
                                     </div>
                                     <div className="flex-grow">
-                                      <h5 className="font-bold text-gray-900 text-sm">Заказчик</h5>
-                                      <h4 className="font-bold text-gray-900 text-base group-hover:text-careem-primary transition">{customer.name}</h4>
+                                      <h5 className="font-bold text-slate-300 text-sm">Заказчик</h5>
+                                      <h4 className="font-bold text-slate-100 text-base group-hover:text-careem-primary transition">{customer.name}</h4>
                                       {customer.phone && (
                                         <span className="text-xs text-careem-primary font-medium mt-1 inline-block">
                                           Нажмите, чтобы увидеть профиль
                                         </span>
                                       )}
                                     </div>
-                                    <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-gray-400 group-hover:text-careem-primary shadow-sm transition">
+                                    <div className="w-9 h-9 bg-white/5 rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-careem-primary border border-white/10 transition">
                                       <i className="fas fa-chevron-right"></i>
                                     </div>
                                   </div>
@@ -1102,8 +1321,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                 <div className="w-full mt-4 p-4 bg-careem-light rounded-xl border border-green-100 animate-in fade-in duration-500">
                                   <div className="flex items-center justify-between mb-3">
                                     <h5 className="font-bold text-sm text-careem-dark">Исполнитель назначен</h5>
-                                    <span className={`px-2 py-1 rounded-lg text-xs font-bold ${order.status === OrderStatus.COMPLETED ? 'bg-green-100 text-green-700' : 'bg-green-100 text-green-700'
-                                      }`}>
+                                    <span className={`text-xs font-black uppercase tracking-wide ${getStatusColor(order.status)}`}>
                                       {getStatusLabel(order.status)}
                                     </span>
                                   </div>
@@ -1191,9 +1409,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
                         {/* Order Details */}
                         {order.details && (
-                          <div className="mt-4 pt-4 border-t border-gray-100">
-                            <h5 className="text-xs font-bold text-gray-400 uppercase mb-2">Детали заказа</h5>
-                            <p className="text-sm text-gray-700">{order.details}</p>
+                          <div className="mt-4 pt-4 border-t border-white/10">
+                            <h5 className="text-xs font-bold text-slate-400 uppercase mb-2">Детали заказа</h5>
+                            <p className="text-sm text-slate-300">{order.details}</p>
                           </div>
                         )}
 
@@ -1226,7 +1444,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                               </div>
                               <div className="flex items-center gap-4">
                                 <span className="text-sm font-bold text-gray-600">{order.totalPrice} ₽</span>
-                                <span className="bg-gray-200 text-gray-600 px-2 py-1 rounded text-xs font-bold">{getStatusLabel(order.status)}</span>
+                                <span className={`text-[11px] leading-none font-black uppercase tracking-wide whitespace-nowrap ${getStatusColor(order.status)}`}>
+                                  {getStatusLabel(order.status)}
+                                </span>
                                 {user.role === UserRole.CUSTOMER && (
                                   <button
                                     onClick={(e) => {
@@ -1341,14 +1561,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
                 <div className="p-6 overflow-y-auto custom-scrollbar">
                   {/* Status & Price */}
-                  <div className="flex items-center justify-between mb-6 bg-careem-light p-4 rounded-xl border border-green-100">
+                  <div className="flex items-center justify-between mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100">
                     <div>
                       <p className="text-xs text-careem-primary font-bold uppercase mb-1">Стоимость</p>
                       <p className="text-2xl font-bold text-careem-dark">{selectedOrderDetails.totalPrice} ₽</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-careem-primary font-bold uppercase mb-1">Статус</p>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(selectedOrderDetails.status)}`}>
+                      <span
+                        className={[
+                          'text-[11px] leading-none font-black uppercase tracking-wide whitespace-nowrap',
+                          getStatusColor(selectedOrderDetails.status),
+                          selectedOrderDetails.status === OrderStatus.PENDING ? 'animate-pulse' : ''
+                        ].join(' ')}
+                      >
                         {getStatusLabel(selectedOrderDetails.status)}
                       </span>
                     </div>
@@ -1386,50 +1612,25 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   <div className="mb-6">
                     <h4 className="text-sm font-bold text-gray-900 mb-2">Маршрут и адрес</h4>
                     {selectedOrderDetails.locationFrom && selectedOrderDetails.locationTo ? (
-                      <div className="space-y-3">
-                        <div className="flex items-start gap-3 p-3 bg-green-50 rounded-xl border border-green-100">
-                          <span className="font-bold bg-green-100 text-green-700 px-2 py-1 rounded text-xs shrink-0 mt-0.5">А</span>
-                          <div>
-                            <p className="text-xs text-green-700 font-bold mb-0.5">Точка отправления</p>
-                            <p className="text-sm text-gray-800 font-medium">{formatAddress(selectedOrderDetails.locationFrom.address)}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3 p-3 bg-red-50 rounded-xl border border-red-100">
-                          <span className="font-bold bg-red-100 text-red-700 px-2 py-1 rounded text-xs shrink-0 mt-0.5">Б</span>
-                          <div>
-                            <p className="text-xs text-red-700 font-bold mb-0.5">Точка назначения</p>
-                            <p className="text-sm text-gray-800 font-medium">{formatAddress(selectedOrderDetails.locationTo.address)}</p>
-                          </div>
-                        </div>
-
-                        {/* Map */}
-                        <OrderMap order={selectedOrderDetails} />
-                      </div>
+                      <OrderMap order={selectedOrderDetails} hideInfo />
                     ) : selectedOrderDetails.generalLocation ? (
-                      <div>
-                        <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 mb-3">
-                          <i className="fas fa-map-marker-alt text-red-500 mt-1 shrink-0 text-lg"></i>
-                          <div>
-                            <p className="text-xs text-gray-500 font-bold mb-0.5">Место встречи</p>
-                            <p className="text-sm text-gray-800 font-medium">{formatAddress(selectedOrderDetails.generalLocation.address)}</p>
-                          </div>
-                        </div>
-                        <OrderMap order={selectedOrderDetails} />
-                      </div>
+                      <OrderMap order={selectedOrderDetails} hideInfo />
                     ) : (
                       <p className="text-sm text-gray-400 italic">Адрес уточняется у заказчика</p>
                     )}
                   </div>
                 </div>
 
-                <div className="p-6 border-t border-gray-100 bg-gray-50">
-                  <button
-                    onClick={() => setSelectedOrderDetails(null)}
-                    className="w-full bg-careem-primary text-white font-bold py-3 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-100"
-                  >
-                    Закрыть
-                  </button>
-                </div>
+                {user.role !== UserRole.CUSTOMER && (
+                  <div className="p-6 border-t border-gray-100 bg-gray-50">
+                    <button
+                      onClick={() => setSelectedOrderDetails(null)}
+                      className="w-full bg-careem-primary text-white font-bold py-3 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-100"
+                    >
+                      Закрыть
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1711,7 +1912,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
           )}
 
           {activeTab === 'profile' && (
-            <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+            <div ref={profileEditorRef} className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-gray-900">
               <h3 className="text-lg font-bold text-gray-900 mb-6">Редактирование профиля</h3>
               <form className="space-y-6" onSubmit={(e) => {
                 e.preventDefault();
@@ -1719,8 +1920,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 const name = e.target.name.value;
                 // @ts-ignore
                 const email = e.target.email.value;
-                // @ts-ignore
-                const description = e.target.description.value;
+                if (user.role === UserRole.EXECUTOR && (!canPublishProfile || profileVerificationStatus === 'pending')) return;
 
                 const customServices = servicesState.filter(s => s.enabled).map(s => ({
                   serviceId: s.serviceId,
@@ -1732,7 +1932,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   ...user,
                   name,
                   email,
-                  description,
+                  description: profileDescription,
+                  profileVerificationStatus: user.role === UserRole.EXECUTOR ? 'pending' : (user.profileVerificationStatus || 'none'),
                   customServices,
                   locationCoordinates: locationCoords,
                   coverageRadius: coverageRadius,
@@ -1747,25 +1948,42 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 localStorage.setItem('bez_barrierov_user', JSON.stringify(newUser));
 
                 setHasUnsavedChanges(false);
-                window.location.reload();
+                updateUser(newUser);
+                setProfileVerificationStatus(newUser.profileVerificationStatus || 'none');
+
+                if (user.role === UserRole.EXECUTOR) {
+                  if (verificationTimerRef.current !== null) {
+                    window.clearTimeout(verificationTimerRef.current);
+                  }
+                  verificationTimerRef.current = window.setTimeout(() => {
+                    const verifiedUser = { ...newUser, profileVerificationStatus: 'verified' as const };
+                    const stored = JSON.parse(localStorage.getItem('bez_barrierov_users') || '[]');
+                    const updatedUsers = stored.map((u: User) => u.id === user.id ? verifiedUser : u);
+                    localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedUsers));
+                    localStorage.setItem('bez_barrierov_user', JSON.stringify(verifiedUser));
+                    updateUser(verifiedUser);
+                    setProfileVerificationStatus('verified');
+                    verificationTimerRef.current = null;
+                  }, 10_000);
+                }
               }}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
                     <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Полное имя</label>
-                    <input name="name" type="text" defaultValue={user.name} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-careem-primary outline-none" />
+                    <input name="name" type="text" defaultValue={user.name} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-careem-primary outline-none" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
                       {user.id.startsWith('telegram-') ? 'Профиль' : 'Email'}
                     </label>
-                    <input name="email" type="email" defaultValue={user.email} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-careem-primary outline-none" />
+                    <input name="email" type="email" defaultValue={user.email} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-careem-primary outline-none" />
                   </div>
                 </div>
 
                 {user.role === UserRole.EXECUTOR && (
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
                     <label className="block text-xs font-bold text-gray-400 uppercase mb-4">
-                      Желаемое место работы и радиус охвата
+                      Желаемое место работы и радиус охвата <span className="text-red-500">*</span>
                     </label>
                     {locationAddress && (
                       <p className="text-sm text-gray-700 mb-3 font-medium bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
@@ -1908,12 +2126,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
                 {user.role === UserRole.EXECUTOR && (
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-4">Услуги и тарифы</label>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-4">
+                      Услуги и тарифы <span className="text-red-500">*</span>
+                    </label>
                     <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-200">
                       {SERVICE_TYPES.map(service => {
                         const state = servicesState.find(s => s.serviceId === service.id)!;
                         return (
-                          <div key={service.id} className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm border border-gray-100">
+                          <div key={service.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-100">
                             <div className="flex items-center gap-3">
                               <input
                                 type="checkbox"
@@ -1931,7 +2151,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                             </div>
 
                             {state.enabled && (
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 sm:justify-end">
                                 <input
                                   type="number"
                                   value={state.price}
@@ -1939,7 +2159,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                     handleServiceChange(service.id, 'price', e.target.value);
                                     setHasUnsavedChanges(true);
                                   }}
-                                  className="w-24 px-2 py-1 text-right border border-gray-300 rounded-md focus:ring-careem-primary focus:border-careem-primary text-sm"
+                                  className="w-24 px-2 py-1 text-right border border-gray-300 rounded-md focus:ring-careem-primary focus:border-careem-primary text-sm text-gray-900 placeholder-gray-400"
                                   placeholder={service.pricePerHour.toString()}
                                 />
                                 <span className="text-sm text-gray-500">₽/час</span>
@@ -1953,13 +2173,41 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 )}
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">О себе</label>
-                  <textarea name="description" rows={4} defaultValue={user.description === 'Новый пользователь' ? '' : user.description} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-careem-primary outline-none" placeholder="Расскажите о своем опыте и навыках..."></textarea>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                    О себе {user.role === UserRole.EXECUTOR && <span className="text-red-500">*</span>}
+                  </label>
+                  <textarea name="description" rows={4} value={profileDescription} onChange={(e) => { setProfileDescription(e.target.value); setHasUnsavedChanges(true); }} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-careem-primary outline-none" placeholder="Расскажите о своем опыте и навыках..."></textarea>
                 </div>
 
-                <div className="flex justify-end pt-4">
-                  <button type="submit" className="bg-careem-primary text-white font-bold py-3 px-8 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200">
-                    Сохранить изменения
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-4 gap-4">
+                  {user.role === UserRole.EXECUTOR ? (
+                    <div className="flex flex-col gap-1">
+                      {profileVerificationStatus !== 'none' && (
+                        <div className={`text-sm font-semibold flex items-center gap-2 ${profileVerificationStatus === 'verified' ? 'text-green-600' : 'text-amber-600'}`}>
+                          {profileVerificationStatus === 'verified' ? (
+                            <i className="fas fa-circle-check"></i>
+                          ) : (
+                            <i className="fas fa-clock"></i>
+                          )}
+                          {profileVerificationStatus === 'verified' ? 'Проверен' : 'Профиль на проверке'}
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500">
+                        Поля, отмеченные <span className="text-red-500">*</span>, обязательны для заполнения.
+                      </p>
+                    </div>
+                  ) : (
+                    <div />
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={(user.role === UserRole.EXECUTOR && !canPublishProfile) || profileVerificationStatus === 'pending'}
+                    className="w-full sm:w-auto bg-careem-primary text-white font-bold py-3 px-8 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-careem-primary"
+                  >
+                    {user.role === UserRole.EXECUTOR
+                      ? (profileVerificationStatus === 'verified' && !hasUnsavedChanges ? 'Опубликовано' : 'Опубликовать')
+                      : 'Сохранить изменения'}
                   </button>
                 </div>
               </form>
