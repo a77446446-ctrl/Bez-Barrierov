@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { MOCK_USERS, SERVICE_TYPES } from '../constants';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { SERVICE_TYPES } from '../constants';
 import { Order, OrderStatus, Review, UserRole, User } from '../types';
 import { MapContainer, TileLayer, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
+import { createClient } from '@supabase/supabase-js';
+import { useAuth } from '../context/AuthContext';
 
 interface UserProfileProps {
   onBook?: (userId: string) => void;
@@ -23,45 +25,197 @@ const MapInvalidator = () => {
 const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user: currentUser } = useAuth();
   const [user, setUser] = useState<User | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(true);
   const [completedOrdersCount, setCompletedOrdersCount] = useState(0);
-  const [responsibilityPercent, setResponsibilityPercent] = useState(100);
+  const [responsibilityPercent, setResponsibilityPercent] = useState<number | string>(100);
   const [displayRating, setDisplayRating] = useState('5.0');
+  const [hasPendingRequest, setHasPendingRequest] = useState(false);
+
+  const getSupabase = () => {
+    const url = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
+    const key = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined;
+    if (!url || !key) return null;
+    return createClient(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    });
+  };
+
+  const profileRowToUser = (row: any): User => {
+    return {
+      id: row.id ?? row.user_id ?? row.userId,
+      role: row.role,
+      name: row.name || '',
+      email: row.email || '',
+      phone: row.phone || '',
+      telegramId: row.telegram_id ?? row.telegramId,
+      avatar: row.avatar ?? row.avatar_url,
+      rating: row.rating ?? undefined,
+      reviewsCount: row.reviews_count ?? row.reviewsCount,
+      reviews: row.reviews ?? undefined,
+      location: row.location ?? undefined,
+      locationCoordinates: row.location_coordinates ?? row.locationCoordinates,
+      coverageRadius: row.coverage_radius ?? row.coverageRadius,
+      description: row.description ?? undefined,
+      profileVerificationStatus: row.profile_verification_status ?? row.profileVerificationStatus,
+      vehiclePhoto: row.vehicle_photo ?? row.vehiclePhoto,
+      customServices: row.custom_services ?? row.customServices,
+      subscriptionStatus: row.subscription_status ?? row.subscriptionStatus,
+      subscriptionStartDate: row.subscription_start_date ?? row.subscriptionStartDate,
+      subscriptionEndDate: row.subscription_end_date ?? row.subscriptionEndDate,
+      subscribedToCustomerId: row.subscribed_to_customer_id ?? row.subscribedToCustomerId,
+      subscriptionRequestToCustomerId: row.subscription_request_to_customer_id ?? row.subscriptionRequestToCustomerId,
+      subscribedExecutorId: row.subscribed_executor_id ?? row.subscribedExecutorId,
+      notifications: row.notifications ?? undefined
+    };
+  };
 
   useEffect(() => {
-    // Try to find user in localStorage first, then MOCK_USERS
-    const storedUsers = localStorage.getItem('bez_barrierov_users');
-    const localUsers: User[] = storedUsers ? JSON.parse(storedUsers) : [];
-    const foundUser = localUsers.find(u => u.id === id) || MOCK_USERS.find(u => u.id === id);
-    setUser(foundUser);
+    if (!id) {
+      setUser(undefined);
+      setIsLoading(false);
+      return;
+    }
+    
+    setIsLoading(true);
+    let isActive = true;
+    const supabase = getSupabase();
+    if (!supabase) {
+      setUser(undefined);
+      setIsLoading(false);
+      return;
+    }
+    void (async () => {
+      try {
+        let res = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+        if (
+          res.error &&
+          (/column profiles\.id does not exist/i.test(res.error.message) ||
+            /Could not find the 'id' column of 'profiles' in the schema cache/i.test(res.error.message))
+        ) {
+          res = await supabase.from('profiles').select('*').eq('user_id', id).maybeSingle();
+        }
+        const { data, error } = res;
+        if (!isActive) return;
+        if (error || !data) {
+          setUser(undefined);
+        } else {
+          setUser(profileRowToUser(data));
+        }
+      } catch (e) {
+        if (isActive) setUser(undefined);
+      } finally {
+        if (isActive) setIsLoading(false);
+      }
+    })();
+    return () => {
+      isActive = false;
+    };
   }, [id]);
 
   useEffect(() => {
     if (!user || user.role !== UserRole.EXECUTOR) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
 
-    const storedOrders = localStorage.getItem('bez_barrierov_orders');
-    const orders: Order[] = storedOrders ? JSON.parse(storedOrders) : [];
+    let isActive = true;
+    void (async () => {
+      const { data } = await supabase.from('orders').select('status, rating').eq('executor_id', user.id);
+      if (!isActive) return;
+      
+      const rows = Array.isArray(data) ? data : [];
+      
+      // 1. Completed Orders Count
+      const statuses = rows.map((r: any) => r.status as OrderStatus);
+      const completed = statuses.filter((s) => s === OrderStatus.COMPLETED).length;
+      setCompletedOrdersCount(completed);
 
-    const executorOrders = orders.filter((o) => o.executorId === user.id);
-    const completed = executorOrders.filter((o) => o.status === OrderStatus.COMPLETED).length;
-    setCompletedOrdersCount(completed);
+      // 2. Responsibility Percent
+      const finished = statuses.filter((s) => s === OrderStatus.COMPLETED || s === OrderStatus.CANCELLED || s === OrderStatus.REJECTED).length;
+      const percent = finished > 0 ? Math.round((completed / finished) * 100) : 0;
+      
+      // Show "......." if no finished orders or responsibility is less than 80%
+      // As per user request: "пока нет оценок просто ....... а уже когда наберется 80 % то тогда можно вывести в этот блок"
+      if (finished === 0 || percent < 80) {
+        setResponsibilityPercent('.......' as any);
+      } else {
+        setResponsibilityPercent(percent);
+      }
 
-    const finished = executorOrders.filter((o) =>
-      o.status === OrderStatus.COMPLETED ||
-      o.status === OrderStatus.CANCELLED ||
-      o.status === OrderStatus.REJECTED
-    ).length;
-    setResponsibilityPercent(finished > 0 ? Math.round((completed / finished) * 100) : 100);
-
-    const avgFromReviews = (reviews?: Review[]) => {
-      if (!reviews || reviews.length === 0) return null;
-      const total = reviews.reduce((sum, r) => sum + r.rating, 0);
-      return Number((total / reviews.length).toFixed(1));
+      // 3. Real Rating Calculation from Orders
+      const ratings = rows
+        .filter((r: any) => typeof r.rating === 'number' && r.rating > 0)
+        .map((r: any) => r.rating);
+      
+      if (ratings.length > 0) {
+        const total = ratings.reduce((sum: number, r: number) => sum + r, 0);
+        const avg = total / ratings.length;
+        setDisplayRating(avg.toFixed(1));
+      } else {
+        setDisplayRating('0.0'); // No ratings yet
+      }
+    })();
+    return () => {
+      isActive = false;
     };
-
-    const ratingValue = user.rating ?? avgFromReviews(user.reviews);
-    setDisplayRating(typeof ratingValue === 'number' ? ratingValue.toFixed(1) : '5.0');
   }, [user]);
+
+  useEffect(() => {
+    if (!user || user.role !== UserRole.EXECUTOR || !currentUser) {
+      setHasPendingRequest(false);
+      return;
+    }
+    const supabase = getSupabase();
+    if (!supabase) {
+      setHasPendingRequest(false);
+      return;
+    }
+
+    let isActive = true;
+    void (async () => {
+      const { data } = await supabase
+        .from('orders')
+        .select('status')
+        .eq('executor_id', user.id)
+        .eq('customer_id', currentUser.id);
+      if (!isActive) return;
+
+      const rows = Array.isArray(data) ? data as any[] : [];
+      const hasActive = rows.some(
+        (r: any) =>
+          r.status !== OrderStatus.COMPLETED &&
+          r.status !== OrderStatus.CANCELLED &&
+          r.status !== OrderStatus.REJECTED
+      );
+      setHasPendingRequest(hasActive);
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [user, currentUser]);
+
+  if (isLoading) {
+    const passedName = location.state?.name;
+    return (
+      <div className="py-20 px-4">
+        <div className="max-w-xl mx-auto text-center bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur-xl">
+          <div className="flex justify-center mb-6">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-careem-primary border-t-transparent"></div>
+          </div>
+          <h2 className="text-xl font-bold text-slate-100 mb-2">
+            {passedName ? `Подождите, идет загрузка профиля ${passedName}...` : 'Подождите, идет загрузка профиля...'}
+          </h2>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -122,10 +276,15 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
               {user.role === UserRole.EXECUTOR && (
                 <div className="sm:ml-auto">
                   <button
-                    onClick={() => onBook ? onBook(user.id) : navigate(`/orders/create?executorId=${user.id}`)}
-                    className="w-full sm:w-auto px-5 py-3 rounded-2xl text-sm font-semibold text-white bg-careem-primary hover:bg-[#255EE6] transition shadow-lg shadow-[#2D6BFF]/20"
+                    onClick={() => {
+                      if (!hasPendingRequest) {
+                        onBook ? onBook(user.id) : navigate(`/orders/create?executorId=${user.id}`);
+                      }
+                    }}
+                    disabled={hasPendingRequest}
+                    className="w-full sm:w-auto px-5 py-3 rounded-2xl text-sm font-semibold text-white bg-careem-primary hover:bg-[#255EE6] transition shadow-lg shadow-[#2D6BFF]/20 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-careem-primary"
                   >
-                    Заказать услугу
+                    {hasPendingRequest ? 'Вы оставили помощнику заявку' : 'Заказать услугу'}
                   </button>
                 </div>
               )}
@@ -219,7 +378,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
                   <div className="text-xs text-slate-400 uppercase tracking-wide">Выполнено заказов</div>
                 </div>
                 <div className="bg-white/5 border border-white/10 p-4 rounded-2xl">
-                  <div className="text-2xl font-extrabold text-careem-primary">{responsibilityPercent}%</div>
+                  <div className="text-2xl font-extrabold text-careem-primary">
+                    {responsibilityPercent === '.......' ? '.......' : `${responsibilityPercent}%`}
+                  </div>
                   <div className="text-xs text-slate-400 uppercase tracking-wide">Ответственность</div>
                 </div>
               </div>

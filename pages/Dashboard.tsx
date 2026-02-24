@@ -3,10 +3,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { User, UserRole, Order, OrderStatus, Review, Location, Notification } from '../types';
-import { MOCK_ORDERS, SERVICE_TYPES } from '../constants';
+import { SERVICE_TYPES } from '../constants';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import OrderMap from '../components/OrderMap';
+import { createClient } from '@supabase/supabase-js';
+import { toast } from 'react-hot-toast';
 
 // OrderMap component removed (imported from components/OrderMap)
 
@@ -24,6 +26,9 @@ const getOrderDateTimeMs = (order: Order) => {
 };
 
 const cleanupExpiredOpenOrders = (orderList: Order[]) => {
+  // Temporarily allow all open orders
+  return orderList;
+  /*
   const now = Date.now();
   return orderList.filter((o) => {
     if (o.status !== OrderStatus.OPEN) return true;
@@ -31,6 +36,7 @@ const cleanupExpiredOpenOrders = (orderList: Order[]) => {
     if (dt === null) return true;
     return dt > now;
   });
+  */
 };
 
 const MapInvalidator = () => {
@@ -77,31 +83,199 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
-  const { updateUser } = useAuth();
+  const { updateUser, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<'orders' | 'profile' | 'subscription'>('orders');
   const ordersHeaderRef = useRef<HTMLHeadingElement | null>(null);
   const profileEditorRef = useRef<HTMLDivElement | null>(null);
   const verificationTimerRef = useRef<number | null>(null);
+  const profileIdColumnRef = useRef<'id' | 'user_id'>('id');
+  const userRef = useRef(user);
 
-  // Initialize orders from localStorage or fall back to MOCK_ORDERS
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const stored = localStorage.getItem('bez_barrierov_orders');
-    if (stored) {
-      return JSON.parse(stored);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  const getSupabase = () => {
+    const url = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
+    const key = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined;
+    if (!url || !key) return null;
+    return createClient(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        lock: async (_name, _acquireTimeout, fn) => {
+          return await fn();
+        }
+      }
+    });
+  };
+
+  const resolveProfileIdColumn = async (supabase: any): Promise<'id' | 'user_id'> => {
+    const cached = profileIdColumnRef.current;
+    if (cached === 'user_id') return cached;
+    const { error } = await supabase.from('profiles').select('id').limit(1);
+    if (
+      error &&
+      (/column profiles\.id does not exist/i.test(error.message) ||
+        /Could not find the 'id' column of 'profiles' in the schema cache/i.test(error.message))
+    ) {
+      profileIdColumnRef.current = 'user_id';
+      return 'user_id';
     }
-    // Initialize with MOCK_ORDERS if nothing in storage
-    localStorage.setItem('bez_barrierov_orders', JSON.stringify(MOCK_ORDERS));
-    return MOCK_ORDERS;
-  });
+    profileIdColumnRef.current = 'id';
+    return 'id';
+  };
 
-  const [allUsers, setAllUsers] = useState<User[]>(() => {
-    const stored = localStorage.getItem('bez_barrierov_users');
-    const users = stored ? JSON.parse(stored) : [];
-    // Filter out legacy mock users
-    return users.filter((u: User) => u.id !== 'u2' && u.id !== 'u3');
-  });
+  const profileRowToUser = (row: any): User => {
+    return {
+      id: row.id ?? row.user_id ?? row.userId,
+      role: row.role,
+      name: row.name || '',
+      email: row.email || '',
+      phone: row.phone || '',
+      telegramId: row.telegram_id ?? row.telegramId,
+      avatar: row.avatar ?? row.avatar_url,
+      isSubscribed: row.is_subscribed ?? row.isSubscribed,
+      rating: row.rating ?? undefined,
+      reviewsCount: row.reviews_count ?? row.reviewsCount,
+      reviews: row.reviews ?? undefined,
+      location: row.location ?? undefined,
+      locationCoordinates: row.location_coordinates ?? row.locationCoordinates,
+      coverageRadius: row.coverage_radius ?? row.coverageRadius,
+      description: row.description ?? undefined,
+      profileVerificationStatus: row.profile_verification_status ?? row.profileVerificationStatus,
+      vehiclePhoto: row.vehicle_photo ?? row.vehiclePhoto,
+      customServices: row.custom_services ?? row.customServices,
+      subscriptionStatus: row.subscription_status ?? row.subscriptionStatus,
+      subscriptionStartDate: row.subscription_start_date ?? row.subscriptionStartDate,
+      subscriptionEndDate: row.subscription_end_date ?? row.subscriptionEndDate,
+      subscribedToCustomerId: row.subscribed_to_customer_id ?? row.subscribedToCustomerId,
+      subscriptionRequestToCustomerId: row.subscription_request_to_customer_id ?? row.subscriptionRequestToCustomerId,
+      subscribedExecutorId: row.subscribed_executor_id ?? row.subscribedExecutorId,
+      notifications: row.notifications ?? undefined
+    };
+  };
+
+  const userToProfileUpdate = (u: User) => {
+    return {
+      role: u.role,
+      name: u.name,
+      email: u.email,
+      phone: u.phone,
+      telegram_id: u.telegramId ?? null,
+      avatar: u.avatar ?? null,
+      is_subscribed: u.isSubscribed ?? null,
+      rating: u.rating ?? null,
+      reviews_count: u.reviewsCount ?? null,
+      reviews: u.reviews ?? null,
+      location: u.location ?? null,
+      location_coordinates: u.locationCoordinates ?? null,
+      coverage_radius: u.coverageRadius ?? null,
+      description: u.description ?? null,
+      profile_verification_status: u.profileVerificationStatus ?? null,
+      vehicle_photo: u.vehiclePhoto ?? null,
+      custom_services: u.customServices ?? null,
+      subscription_status: u.subscriptionStatus ?? null,
+      subscription_start_date: u.subscriptionStartDate ?? null,
+      subscription_end_date: u.subscriptionEndDate ?? null,
+      subscribed_to_customer_id: u.subscribedToCustomerId ?? null,
+      subscription_request_to_customer_id: u.subscriptionRequestToCustomerId ?? null,
+      subscribed_executor_id: u.subscribedExecutorId ?? null,
+      notifications: u.notifications ?? null
+    };
+  };
+
+  const orderRowToOrder = (row: any): Order => {
+    return {
+      id: row.id,
+      customerId: row.customer_id,
+      executorId: row.executor_id ?? undefined,
+      serviceType: row.service_type,
+      date: row.date,
+      time: row.time,
+      status: row.status,
+      totalPrice: row.total_price,
+      details: row.details ?? undefined,
+      rejectionReason: row.rejection_reason ?? undefined,
+      allowOpenSelection: row.allow_open_selection ?? undefined,
+      responses: Array.isArray(row.responses) ? row.responses.map((x: any) => String(x)) : [],
+      voiceMessageUrl: row.voice_message_url ?? undefined,
+      rating: row.rating ?? undefined,
+      review: row.review ?? undefined,
+      locationFrom: row.location_from ?? undefined,
+      locationTo: row.location_to ?? undefined,
+      generalLocation: row.general_location ?? undefined
+    };
+  };
+
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isOrdersLoading, setIsOrdersLoading] = useState(true);
+  const [realRatings, setRealRatings] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const fetchRealRatings = async () => {
+      const supabase = getSupabase();
+      if (!supabase) return;
+      
+      const { data } = await supabase
+        .from('orders')
+        .select('executor_id, rating')
+        .not('rating', 'is', null)
+        .gt('rating', 0);
+
+      if (data) {
+        const ratingsMap: Record<string, number[]> = {};
+        data.forEach((row: any) => {
+          if (row.executor_id) {
+            if (!ratingsMap[row.executor_id]) ratingsMap[row.executor_id] = [];
+            ratingsMap[row.executor_id].push(row.rating);
+          }
+        });
+
+        const averages: Record<string, string> = {};
+        Object.keys(ratingsMap).forEach(id => {
+          const ratings = ratingsMap[id];
+          const sum = ratings.reduce((a, b) => a + b, 0);
+          averages[id] = (sum / ratings.length).toFixed(1);
+        });
+        setRealRatings(averages);
+      }
+    };
+    
+    fetchRealRatings();
+  }, []);
+
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshTrigger(prev => prev + 1);
+    }, 60000); // Update every 1 minute
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    let isActive = true;
+    void (async () => {
+      const { data, error } = await supabase.from('profiles').select('*');
+      if (!isActive) return;
+      if (error || !Array.isArray(data)) {
+        setAllUsers([]);
+        return;
+      }
+      setAllUsers(data.map(profileRowToUser));
+    })();
+    return () => {
+      isActive = false;
+    };
+  }, [user.id, refreshTrigger]);
 
   const [servicesState, setServicesState] = useState(
     SERVICE_TYPES.map(st => {
@@ -140,6 +314,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const [locationAddress, setLocationAddress] = useState<string>(user.locationCoordinates?.address || '');
   const [coverageRadius, setCoverageRadius] = useState<number>(user.coverageRadius || 5);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState(user.avatar);
   const [vehiclePhotoPreview, setVehiclePhotoPreview] = useState(user.vehiclePhoto);
   const [profileDescription, setProfileDescription] = useState<string>(
@@ -151,9 +326,314 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
   useEffect(() => {
     setProfileVerificationStatus(user.profileVerificationStatus || 'none');
-  }, [user.profileVerificationStatus]);
+
+    // Auto-verify after 15 seconds if pending
+    if (user.role === UserRole.EXECUTOR && user.profileVerificationStatus === 'pending') {
+      const timer = setTimeout(() => {
+        const verifiedUser = { ...user, profileVerificationStatus: 'verified' as const };
+        
+        // Update local state
+        setProfileVerificationStatus('verified');
+        setAllUsers(prev => prev.map((u: User) => (u.id === user.id ? verifiedUser : u)));
+        
+        // Update global context
+        updateUser(verifiedUser);
+
+        // Redirect to orders page immediately
+        navigate('/dashboard?tab=orders');
+      }, 15_000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [user.profileVerificationStatus, user.role, user.id]);
 
   // Helper for map events handled inline
+  const renderProfileEditor = () => (
+    <div ref={profileEditorRef} className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-gray-900">
+      <h3 className="text-lg font-bold text-gray-900 mb-6">Редактирование профиля</h3>
+      <form className="space-y-6" onSubmit={async (e) => {
+        e.preventDefault();
+        // @ts-ignore
+        const name = e.target.name.value;
+        // @ts-ignore
+        const email = e.target.email.value;
+        if (user.role === UserRole.EXECUTOR && (!canPublishProfile || profileVerificationStatus === 'pending')) return;
+
+        const customServices = servicesState.filter(s => s.enabled).map(s => ({
+          serviceId: s.serviceId,
+          price: Number(s.price),
+          enabled: true
+        }));
+
+        const newUser = {
+          ...user,
+          name,
+          email,
+          description: profileDescription,
+          profileVerificationStatus: user.role === UserRole.EXECUTOR ? 'pending' : (user.profileVerificationStatus || 'none'),
+          customServices,
+          locationCoordinates: locationCoords,
+          coverageRadius: coverageRadius,
+          avatar: avatarPreview,
+          vehiclePhoto: vehiclePhotoPreview
+        };
+
+        // Optimistic update
+        setAllUsers(prev => prev.map((u: User) => (u.id === user.id ? newUser : u)));
+        setHasUnsavedChanges(false);
+        updateUser(newUser);
+        setProfileVerificationStatus(newUser.profileVerificationStatus || 'none');
+      }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Полное имя</label>
+            <input name="name" type="text" defaultValue={user.name} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-careem-primary outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+              {user.id?.startsWith('telegram-') ? 'Профиль' : 'Email'}
+            </label>
+            <input name="email" type="email" defaultValue={user.email} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-careem-primary outline-none" />
+          </div>
+        </div>
+
+        {user.role === UserRole.EXECUTOR && (
+          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+            <label className="block text-xs font-bold text-gray-400 uppercase mb-4">
+              Желаемое место работы и радиус охвата <span className="text-red-500">*</span>
+            </label>
+            {locationAddress && (
+              <p className="text-sm text-gray-700 mb-3 font-medium bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                <i className="fas fa-map-marker-alt text-red-500 mr-2"></i>
+                {locationAddress}
+              </p>
+            )}
+            <div className="h-64 rounded-xl overflow-hidden mb-4 border border-gray-300 relative z-0">
+              <MapContainer
+                center={locationCoords ? [locationCoords.lat, locationCoords.lng] : [55.75, 37.61]}
+                zoom={10}
+                style={{ width: '100%', height: '100%' }}
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  keepBuffer={4}
+                />
+                <MapInvalidator />
+
+                <DashboardMapEvents
+                  setLocationCoords={setLocationCoords}
+                  setLocationAddress={setLocationAddress}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                />
+
+                {locationCoords && (
+                  <>
+                    <Marker position={[locationCoords.lat, locationCoords.lng]} />
+                    {coverageRadius && (
+                      <Circle
+                        center={[locationCoords.lat, locationCoords.lng]}
+                        radius={coverageRadius * 1000}
+                        pathOptions={{ fillColor: '#828282', color: '#828282', fillOpacity: 0.5, weight: 2 }}
+                      />
+                    )}
+                  </>
+                )}
+              </MapContainer>
+            </div>
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Радиус (км): {coverageRadius}</label>
+              <input
+                type="range"
+                min="1"
+                max="50"
+                value={coverageRadius}
+                onChange={(e) => {
+                  setCoverageRadius(Number(e.target.value));
+                  setHasUnsavedChanges(true);
+                }}
+                className="w-full"
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-2">Кликните на карту, чтобы установить центр рабочей зоны.</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Фотография профиля</label>
+            <label className="mt-1 flex justify-center items-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl hover:border-careem-primary transition cursor-pointer relative group block w-full h-48 overflow-hidden bg-gray-50">
+              {avatarPreview ? (
+                <>
+                  <img src={avatarPreview} alt="Avatar" className="absolute inset-0 w-full h-full object-contain bg-gray-50 opacity-100 group-hover:opacity-50 transition-opacity duration-300" />
+                  <div className="relative z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center">
+                    <i className="fas fa-camera text-gray-800 text-3xl mb-2"></i>
+                    <span className="text-sm font-bold text-gray-800 bg-white/80 px-3 py-1 rounded-full">Изменить фото</span>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-1 text-center w-full relative z-10">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <div className="flex text-sm text-gray-600 justify-center">
+                    <span className="relative rounded-md font-medium text-careem-primary hover:text-green-500 focus-within:outline-none">
+                      <span>Загрузить фото</span>
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">PNG, JPG, GIF до 10MB</p>
+                </div>
+              )}
+              <input type="file" className="sr-only" accept="image/*" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                    const base64String = reader.result as string;
+                    setAvatarPreview(base64String);
+                    setHasUnsavedChanges(true);
+                  };
+                  reader.readAsDataURL(file);
+                }
+              }} />
+            </label>
+          </div>
+
+          {user.role === UserRole.EXECUTOR && (
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Фото транспорта <span className="text-gray-300 font-normal">(не обязательно)</span></label>
+              <label className="mt-1 flex justify-center items-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl hover:border-careem-primary transition cursor-pointer relative group block w-full h-48 overflow-hidden bg-gray-50">
+                {vehiclePhotoPreview ? (
+                  <>
+                    <img src={vehiclePhotoPreview} alt="Vehicle" className="absolute inset-0 w-full h-full object-contain bg-gray-50 opacity-100 group-hover:opacity-50 transition-opacity duration-300" />
+                    <div className="relative z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center">
+                      <i className="fas fa-camera text-gray-800 text-3xl mb-2"></i>
+                      <span className="text-sm font-bold text-gray-800 bg-white/80 px-3 py-1 rounded-full">Изменить фото</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-1 text-center w-full relative z-10">
+                    <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                      <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <div className="flex text-sm text-gray-600 justify-center">
+                      <span className="relative rounded-md font-medium text-careem-primary hover:text-green-500 focus-within:outline-none">
+                        <span>Загрузить фото</span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">PNG, JPG, GIF до 10MB</p>
+                  </div>
+                )}
+                <input type="file" className="sr-only" accept="image/*" onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      const base64String = reader.result as string;
+                      setVehiclePhotoPreview(base64String);
+                      setHasUnsavedChanges(true);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }} />
+              </label>
+            </div>
+          )}
+        </div>
+
+        {user.role === UserRole.EXECUTOR && (
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase mb-4">
+              Услуги и тарифы <span className="text-red-500">*</span>
+            </label>
+            <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-200">
+              {SERVICE_TYPES.map(service => {
+                const state = servicesState.find(s => s.serviceId === service.id)!;
+                return (
+                  <div key={service.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-100">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        id={`service-${service.id}`}
+                        checked={state.enabled}
+                        onChange={(e) => {
+                          handleServiceChange(service.id, 'enabled', e.target.checked);
+                          setHasUnsavedChanges(true);
+                        }}
+                        className="w-5 h-5 text-careem-primary rounded focus:ring-careem-primary border-gray-300"
+                      />
+                      <label htmlFor={`service-${service.id}`} className="text-sm font-medium text-gray-700 cursor-pointer select-none">
+                        {service.name}
+                      </label>
+                    </div>
+
+                    {state.enabled && (
+                      <div className="flex items-center gap-2 sm:justify-end">
+                        <input
+                          type="number"
+                          value={state.price}
+                          onChange={(e) => {
+                            handleServiceChange(service.id, 'price', e.target.value);
+                            setHasUnsavedChanges(true);
+                          }}
+                          className="w-24 px-2 py-1 text-right border border-gray-300 rounded-md focus:ring-careem-primary focus:border-careem-primary text-sm text-gray-900 placeholder-gray-400"
+                          placeholder={service.pricePerHour.toString()}
+                        />
+                        <span className="text-sm text-gray-500">₽/час</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+            О себе {user.role === UserRole.EXECUTOR && <span className="text-red-500">*</span>}
+          </label>
+          <textarea name="description" rows={4} value={profileDescription} onChange={(e) => { setProfileDescription(e.target.value); setHasUnsavedChanges(true); }} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-careem-primary outline-none" placeholder="Расскажите о своем опыте и навыках..."></textarea>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-4 gap-4">
+          {user.role === UserRole.EXECUTOR ? (
+            <div className="flex flex-col gap-1">
+              {profileVerificationStatus !== 'none' && (
+                <div className={`text-sm font-semibold flex items-center gap-2 ${profileVerificationStatus === 'verified' ? 'text-green-600' : 'text-amber-600'}`}>
+                  {profileVerificationStatus === 'verified' ? (
+                    <i className="fas fa-circle-check"></i>
+                  ) : (
+                    <i className="fas fa-clock"></i>
+                  )}
+                  {profileVerificationStatus === 'verified' ? 'Проверен' : 'Профиль на проверке'}
+                </div>
+              )}
+              <p className="text-xs text-gray-500">
+                Поля, отмеченные <span className="text-red-500">*</span>, обязательны для заполнения.
+              </p>
+            </div>
+          ) : (
+            <div />
+          )}
+
+          <button
+            type="submit"
+            disabled={
+              (user.role === UserRole.EXECUTOR && !canPublishProfile) ||
+              profileVerificationStatus === 'pending' ||
+              (user.role === UserRole.CUSTOMER && !hasUnsavedChanges)
+            }
+            className="w-full sm:w-auto bg-careem-primary text-white font-bold py-3 px-8 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-careem-primary"
+          >
+            {user.role === UserRole.EXECUTOR
+              ? (profileVerificationStatus === 'verified' && !hasUnsavedChanges ? 'Опубликовано' : (profileVerificationStatus === 'pending' ? 'На проверке...' : 'Опубликовать'))
+              : 'Сохранить изменения'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 
 
   const handleTabChange = (tab: 'orders' | 'profile' | 'subscription') => {
@@ -181,6 +661,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   };
 
   const handleGoToProfile = () => {
+    if (window.innerWidth < 1024) {
+      setIsProfileModalOpen(true);
+      return;
+    }
     if (!handleTabChange('profile')) return;
     window.setTimeout(() => {
       scrollToElement(profileEditorRef.current);
@@ -214,11 +698,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
     const cleanup = () => {
       setOrders((current) => {
         const cleaned = cleanupExpiredOpenOrders(current);
-        if (cleaned.length !== current.length) {
-          localStorage.setItem('bez_barrierov_orders', JSON.stringify(cleaned));
-          return cleaned;
-        }
-        return current;
+        return cleaned;
       });
     };
 
@@ -226,6 +706,201 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
     const intervalId = window.setInterval(cleanup, 30_000);
     return () => window.clearInterval(intervalId);
   }, [user.role]);
+
+  // Self-Repair Logic for Subscriptions (Handles RLS issues)
+  useEffect(() => {
+    if (!user || !user.id || user.role !== UserRole.EXECUTOR) return;
+
+    // 1. Check for Pending Confirmation
+    if (user.subscriptionStatus === 'pending' && user.subscriptionRequestToCustomerId) {
+      const customer = allUsers.find(u => u.id === user.subscriptionRequestToCustomerId);
+      if (!customer) return;
+
+      // 1.1 CONFIRMATION CHECK
+      if (customer.subscribedExecutorId === user.id) {
+        console.log('Self-repair: Customer confirmed me!');
+        const startDate = new Date().toISOString();
+        const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        const updatedMe = {
+          ...user,
+          subscriptionStatus: 'active' as const,
+          subscriptionStartDate: startDate,
+          subscriptionEndDate: endDate,
+          subscribedToCustomerId: customer.id,
+          subscriptionRequestToCustomerId: undefined
+        };
+        updateUser(updatedMe);
+      }
+      // 1.2 REJECTION CHECK
+      else if (customer.subscriptionRequestToCustomerId === `REJECTED:${user.id}`) {
+        console.log('Self-repair: Customer rejected me!');
+        const updatedMe = {
+          ...user,
+          subscriptionStatus: 'none' as const,
+          subscriptionRequestToCustomerId: undefined
+        };
+        updateUser(updatedMe);
+      }
+    }
+
+    // 2. Check for Active Subscription Cancellation
+    if (user.subscriptionStatus === 'active' && user.subscribedToCustomerId) {
+      const customer = allUsers.find(u => u.id === user.subscribedToCustomerId);
+      
+      // If customer is found and they are NOT subscribed to me (or subscribed to someone else), cancel my sub
+      if (customer && customer.subscribedExecutorId !== user.id) {
+        console.log('Self-repair: Customer cancelled subscription!');
+        
+        // Check for existing recent notification to avoid duplicates
+        const existingNotif = user.notifications?.find(n => 
+            n.title === 'Подписка отменена' && 
+            n.message.includes(`Заказчик ${customer.name}`) &&
+            (Date.now() - new Date(n.date).getTime() < 60000) // Within last minute
+        );
+
+        let newNotifications = user.notifications || [];
+        if (!existingNotif) {
+             const notification: Notification = {
+              id: Date.now().toString(),
+              type: 'warning',
+              title: 'Подписка отменена',
+              message: `Заказчик ${customer.name} отменил подписку.`,
+              date: new Date().toISOString(),
+              read: false
+            };
+            newNotifications = [notification, ...newNotifications];
+        }
+
+        const updatedMe = {
+          ...user,
+          subscriptionStatus: 'none' as const,
+          subscribedToCustomerId: undefined,
+          subscriptionStartDate: undefined,
+          subscriptionEndDate: undefined,
+          notifications: newNotifications
+        };
+        updateUser(updatedMe);
+      }
+    }
+  }, [user, allUsers, updateUser]);
+
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    let isActive = true;
+    
+    setIsOrdersLoading(true);
+
+    const loadOrders = async () => {
+      if (user.role === UserRole.EXECUTOR) {
+        // Check for active confirmed order first
+        const { data: activeOrders } = await supabase
+           .from('orders')
+           .select('*')
+           .eq('executor_id', user.id)
+           .eq('status', OrderStatus.CONFIRMED);
+
+        if (activeOrders && activeOrders.length > 0) {
+           // Executor is busy, only show the active order
+           setOrders(activeOrders.map(orderRowToOrder));
+           setIsOrdersLoading(false);
+           return;
+        }
+      }
+
+      let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
+      if (user.role === UserRole.CUSTOMER) {
+        query = query.eq('customer_id', user.id);
+      } else if (user.role === UserRole.EXECUTOR) {
+        query = query.or(`executor_id.eq.${user.id},status.eq.${OrderStatus.OPEN}`);
+      }
+      const { data, error } = await query;
+      if (!isActive) return;
+      if (error || !Array.isArray(data)) {
+        setOrders([]);
+        setIsOrdersLoading(false);
+        return;
+      }
+      setOrders(data.map(orderRowToOrder));
+      setIsOrdersLoading(false);
+    };
+
+    void loadOrders();
+
+    // Подписка на изменения в реальном времени (Supabase Realtime)
+    const channel = supabase
+      .channel('realtime-orders')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        (payload) => {
+          if (!isActive) return;
+
+          if (payload.eventType === 'INSERT') {
+            const newOrder = orderRowToOrder(payload.new);
+            let isRelevant = false;
+            
+            if (user.role === UserRole.CUSTOMER) {
+              if (newOrder.customerId === user.id) isRelevant = true;
+            } else if (user.role === UserRole.EXECUTOR) {
+              if (newOrder.executorId === user.id || newOrder.status === OrderStatus.OPEN) isRelevant = true;
+            }
+            
+            if (isRelevant) {
+              setOrders((prev) => [newOrder, ...prev]);
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const updatedOrder = orderRowToOrder(payload.new);
+
+            // Notify Customer if Executor rejected their order
+            const currentUser = userRef.current;
+            if (currentUser.role === UserRole.CUSTOMER && updatedOrder.customerId === currentUser.id) {
+               if (updatedOrder.status === OrderStatus.OPEN && updatedOrder.rejectionReason) {
+                   const notifMessage = `Ваш заказ на ${updatedOrder.date} ${updatedOrder.time} был отклонен. Причина: ${updatedOrder.rejectionReason}`;
+                   const alreadyExists = currentUser.notifications?.some(n => n.message === notifMessage);
+                   
+                   if (!alreadyExists) {
+                       const notification: Notification = {
+                           id: Date.now().toString(),
+                           type: 'warning',
+                           title: 'Заказ отклонен',
+                           message: notifMessage,
+                           date: new Date().toISOString(),
+                           read: false
+                       };
+                       const updatedUser = { 
+                           ...currentUser, 
+                           notifications: [notification, ...(currentUser.notifications || [])] 
+                       };
+                       updateUser(updatedUser);
+                   }
+               }
+            }
+
+            setOrders((prev) => {
+              const exists = prev.find((o) => o.id === updatedOrder.id);
+              if (exists) {
+                return prev.map((o) => (o.id === updatedOrder.id ? updatedOrder : o));
+              } else {
+                // Если заказа не было в списке, но он стал релевантным (например, стал OPEN)
+                let isRelevant = false;
+                if (user.role === UserRole.EXECUTOR && updatedOrder.status === OrderStatus.OPEN) isRelevant = true;
+                if (isRelevant) return [updatedOrder, ...prev];
+                return prev;
+              }
+            });
+          } else if (payload.eventType === 'DELETE') {
+            setOrders((prev) => prev.filter((o) => o.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isActive = false;
+      supabase.removeChannel(channel);
+    };
+  }, [user.id, user.role]);
 
   const myOrders = orders.filter(o => {
     if (user.role === UserRole.CUSTOMER) {
@@ -250,7 +925,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const executorAssignedCount = user.role === UserRole.EXECUTOR
     ? orders.filter(o =>
         o.executorId === user.id &&
-        ![OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.REJECTED].includes(o.status)
+        o.status === OrderStatus.PENDING
       ).length
     : 0;
 
@@ -262,19 +937,25 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const activeOrders = allDisplayedOrders.filter(o => o.status !== OrderStatus.COMPLETED);
   const completedOrders = allDisplayedOrders.filter(o => o.status === OrderStatus.COMPLETED);
 
-  const handleUpdateOrderStatus = (orderId: string, newStatus: OrderStatus, rejectionReason?: string) => {
-    const updatedOrders = orders.map(o => {
-      if (o.id === orderId) {
-        return { ...o, status: newStatus, rejectionReason: rejectionReason };
-      }
-      return o;
-    });
-
-    setOrders(updatedOrders);
-    localStorage.setItem('bez_barrierov_orders', JSON.stringify(updatedOrders));
-
-    // Call parent handler for notifications
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: OrderStatus, rejectionReason?: string) => {
+    // 1. Optimistic UI Update
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: newStatus, rejectionReason } : o)));
     onUpdateStatus(orderId, newStatus, rejectionReason);
+
+    // 2. Background DB Update
+    const supabase = getSupabase();
+    if (!supabase) return;
+    
+    supabase
+      .from('orders')
+      .update({ status: newStatus, rejection_reason: rejectionReason ?? null })
+      .eq('id', orderId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('Error updating order status:', error);
+          // Optional: Revert state here if needed
+        }
+      });
   };
 
   const handleServiceChange = (id: string, field: 'enabled' | 'price', value: any) => {
@@ -289,27 +970,59 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const [rejectingOrderId, setRejectingOrderId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  const handleRejectOrder = () => {
+  const handleRejectOrder = async () => {
     if (rejectingOrderId && rejectionReason.trim()) {
-      const updatedOrders = orders.map(o => {
-        if (o.id === rejectingOrderId) {
-          const canBecomeOpen = o.allowOpenSelection === true;
-          return {
-            ...o,
-            status: canBecomeOpen ? OrderStatus.OPEN : OrderStatus.REJECTED,
-            rejectionReason: rejectionReason,
-            executorId: canBecomeOpen ? undefined : o.executorId,
-            responses: canBecomeOpen ? [] : o.responses
-          };
-        }
-        return o;
-      });
+      // Force reopening for now to ensure visibility across all helpers
+      const canBecomeOpen = true; 
+      const nextStatus = OrderStatus.OPEN;
 
-      setOrders(updatedOrders);
-      localStorage.setItem('bez_barrierov_orders', JSON.stringify(updatedOrders));
-
+      // 1. Close Modal Immediately
+      const currentOrderId = rejectingOrderId;
+      const currentReason = rejectionReason;
+      
       setRejectingOrderId(null);
       setRejectionReason('');
+
+      // 2. Optimistic UI Update
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === currentOrderId
+            ? {
+                ...o,
+                status: nextStatus,
+                rejectionReason: currentReason,
+                executorId: undefined, // Always clear executor
+                responses: [] // Always clear responses
+              }
+            : o
+        )
+      );
+
+      // 3. Background DB Update
+      const supabase = getSupabase();
+      if (supabase) {
+        const updatePayload: any = {
+          status: nextStatus,
+          rejection_reason: currentReason,
+          executor_id: null, // Explicitly set to null
+          responses: []      // Explicitly clear responses
+        };
+
+        supabase
+          .from('orders')
+          .update(updatePayload)
+          .eq('id', currentOrderId)
+          .then(({ error }) => {
+             if (error) {
+               console.error('Error rejecting order:', error);
+               toast.error('Не удалось обновить статус заказа. Пожалуйста, обратитесь к администратору или попробуйте позже.');
+               // Revert optimistic update?
+               // ...
+             } else {
+               toast.success('Заказ успешно отклонен');
+             }
+          });
+      }
     }
   };
 
@@ -328,157 +1041,238 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError, setDeleteError] = useState('');
 
-  const handleDeleteProfile = () => {
+  const handleDeleteProfile = async () => {
     if (!deletePassword.trim()) {
       setDeleteError('Введите пароль для подтверждения');
       return;
     }
 
-    if (!window.confirm('ВНИМАНИЕ! Вы собираетесь удалить свой профиль. Это действие необратимо. Все ваши данные, история заказов и настройки будут удалены без возможности восстановления. Вы уверены, что хотите продолжить?')) {
+    const supabase = getSupabase();
+    if (!supabase) {
+      setDeleteError('Ошибка подключения к серверу');
       return;
     }
 
-    // In a real app, we would verify the password with the backend
-    // Here we just simulate verification (accept any non-empty password)
+    // 1. Verify password
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: deletePassword,
+    });
 
-    // 1. Remove user from allUsers
+    if (signInError) {
+      setDeleteError('Неверный пароль');
+      return;
+    }
+
+    // 2. Confirm deletion
+    if (!window.confirm('Вы точно хотите удалить профиль без возвратно?')) {
+      return;
+    }
+
+    // 3. Delete data
+    try {
+      await supabase.functions.invoke('delete-user', { body: { userId: user.id } });
+    } catch {}
+    
+    try {
+      const col = await resolveProfileIdColumn(supabase);
+      await supabase.from('profiles').delete().eq(col, user.id);
+    } catch (e) {
+      console.error('Error deleting profile:', e);
+    }
+
+    await supabase.auth.signOut();
+
     const updatedUsers = allUsers.filter(u => u.id !== user.id);
     setAllUsers(updatedUsers);
-    localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedUsers));
-
-    // 2. Clear current session
-    localStorage.removeItem('bez_barrierov_user');
-
-    // 3. Redirect to home/auth
-    window.location.href = '/auth';
+    logout();
+    window.location.href = '/auth?mode=register&deleted=1';
   };
 
-  const handleCompleteOrder = () => {
+  const handleCompleteOrder = async () => {
     if (completingOrderId) {
-      // 1. Update Order
-      const updatedOrders = orders.map(o => {
-        if (o.id === completingOrderId) {
-          return {
-            ...o,
-            status: OrderStatus.COMPLETED,
-            rating: reviewRating,
-            review: reviewText
-          };
-        }
-        return o;
-      });
-      setOrders(updatedOrders);
-      localStorage.setItem('bez_barrierov_orders', JSON.stringify(updatedOrders));
-
-      // 2. Update Executor User
-      const order = orders.find(o => o.id === completingOrderId);
-      if (order && order.executorId) {
-        const updatedUsers = allUsers.map(u => {
-          if (u.id === order.executorId) {
-            const currentReviews = u.reviews || [];
-            const newReview: Review = {
-              id: Date.now().toString(),
-              authorId: user.id,
-              authorName: user.name,
-              rating: reviewRating,
-              text: reviewText,
-              date: new Date().toLocaleDateString()
-            };
-
-            const newReviews = [...currentReviews, newReview];
-            const totalRating = newReviews.reduce((sum, r) => sum + r.rating, 0);
-            const newAverageRating = Number((totalRating / newReviews.length).toFixed(1));
-
-            return {
-              ...u,
-              reviews: newReviews,
-              reviewsCount: newReviews.length,
-              rating: newAverageRating
-            };
-          }
-          return u;
-        });
-        setAllUsers(updatedUsers);
-        localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedUsers));
-      }
+      const orderId = completingOrderId;
+      const ratingValue = reviewRating;
+      const reviewValue = reviewText;
 
       setCompletingOrderId(null);
       setReviewRating(5);
       setReviewText('');
 
+      handleGoToOrders();
+
+      const supabase = getSupabase();
+      if (supabase) {
+        await supabase
+          .from('orders')
+          .update({ status: OrderStatus.COMPLETED, rating: ratingValue, review: reviewValue })
+          .eq('id', orderId);
+      }
+
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId ? { ...o, status: OrderStatus.COMPLETED, rating: ratingValue, review: reviewValue } : o
+        )
+      );
+
+      // 2. Update Executor User
+      const order = orders.find(o => o.id === orderId);
+      if (order && order.executorId) {
+        const executor = allUsers.find(u => u.id === order.executorId);
+        if (executor) {
+          const currentReviews = executor.reviews || [];
+          const newReview: Review = {
+            id: Date.now().toString(),
+            authorId: user.id,
+            authorName: user.name,
+            rating: ratingValue,
+            text: reviewValue,
+            date: new Date().toLocaleDateString()
+          };
+
+          const newReviews = [...currentReviews, newReview];
+          const totalRating = newReviews.reduce((sum, r) => sum + r.rating, 0);
+          const newAverageRating = Number((totalRating / newReviews.length).toFixed(1));
+          const updatedExecutor: User = {
+            ...executor,
+            reviews: newReviews,
+            reviewsCount: newReviews.length,
+            rating: newAverageRating
+          };
+          setAllUsers(prev => prev.map(u => (u.id === updatedExecutor.id ? updatedExecutor : u)));
+          const supabaseProfiles = getSupabase();
+          if (supabaseProfiles) {
+            const col = await resolveProfileIdColumn(supabaseProfiles);
+            await supabaseProfiles.from('profiles').update(userToProfileUpdate(updatedExecutor)).eq(col, updatedExecutor.id);
+          }
+        }
+      }
+
       // Notify parent/system
-      onUpdateStatus(completingOrderId, OrderStatus.COMPLETED);
+      onUpdateStatus(orderId, OrderStatus.COMPLETED);
     }
   };
 
-  const handleTakeOpenOrder = (orderId: string) => {
-    const updatedOrders = orders.map(o => {
-      if (o.id !== orderId) return o;
-      if (o.status !== OrderStatus.OPEN) return o;
-      return {
-        ...o,
-        status: OrderStatus.CONFIRMED,
-        executorId: user.id,
-        responses: []
-      };
-    });
-    setOrders(updatedOrders);
-    localStorage.setItem('bez_barrierov_orders', JSON.stringify(updatedOrders));
+  const handleTakeOpenOrder = async (orderId: string) => {
+    // 1. Optimistic UI Update
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: OrderStatus.CONFIRMED, executorId: user.id, responses: [] } : o))
+    );
     onUpdateStatus(orderId, OrderStatus.CONFIRMED);
+
+    // 2. Background DB Update
+    const supabase = getSupabase();
+    if (supabase) {
+      supabase.from('orders').update({ status: OrderStatus.CONFIRMED, executor_id: user.id, responses: [] }).eq('id', orderId).then();
+    }
   };
 
-  const handleDeleteOrder = (orderId: string) => {
-    const updatedOrders = orders.filter(o => o.id !== orderId);
-    setOrders(updatedOrders);
-    localStorage.setItem('bez_barrierov_orders', JSON.stringify(updatedOrders));
+  const handleDeleteOrder = async (orderId: string) => {
+    // 1. Optimistic UI Update
+    setOrders((prev) => prev.filter((o) => o.id !== orderId));
+
+    // 2. Background DB Update
+    const supabase = getSupabase();
+    if (supabase) {
+      supabase.from('orders').delete().eq('id', orderId).then();
+    }
   };
 
-  const handleSelectExecutor = (orderId: string, executorId: string) => {
-    const updatedOrders = orders.map(o => {
-      if (o.id === orderId) {
-        return {
-          ...o,
-          status: OrderStatus.CONFIRMED,
-          executorId: executorId,
-          responses: [] // Clear responses as one is selected
-        };
-      }
-      return o;
-    });
-    setOrders(updatedOrders);
-    localStorage.setItem('bez_barrierov_orders', JSON.stringify(updatedOrders));
+  const handleSelectExecutor = async (orderId: string, executorId: string) => {
+    // 1. Optimistic UI Update
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: OrderStatus.CONFIRMED, executorId, responses: [] } : o))
+    );
+
+    // 2. Background DB Update
+    const supabase = getSupabase();
+    if (supabase) {
+      supabase.from('orders').update({ status: OrderStatus.CONFIRMED, executor_id: executorId, responses: [] }).eq('id', orderId).then();
+    }
   };
 
-  const handleSubscribeRequest = (customerId: string) => {
-    // 1. Update Executor (me) state -> pending, requestTo
+  const handleSubscribeRequest = async (customerId: string) => {
     const updatedUser = {
       ...user,
       subscriptionStatus: 'pending' as const,
       subscriptionRequestToCustomerId: customerId
     };
+    
+    // Close modal immediately
+    setViewingCustomer(null);
+    
+    // Update local state
+    setAllUsers(prev => prev.map(u => (u.id === user.id ? updatedUser : u)));
+    updateUser(updatedUser); // Handles DB update in background
 
-    // Update local storage for current user
-    localStorage.setItem('bez_barrierov_user', JSON.stringify(updatedUser));
-
-    // 2. Update All Users list (to persist changes)
-    const updatedAllUsers = allUsers.map(u => {
-      if (u.id === user.id) return updatedUser;
-      return u;
-    });
-    localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedAllUsers));
-
-    // 3. Notify Customer (simulated via local storage or just state if real-time)
-    // In a real app, we would send a request to backend. 
-    // Here we rely on the Customer checking their dashboard and seeing the request.
-    // We can simulate a "notification" by adding a flag to the customer object too?
-    // Let's rely on the Customer Dashboard logic checking for incoming requests.
-
-    // Force reload/update (simplified)
-    window.location.reload();
-    alert('Запрос на подписку отправлен! Ожидайте подтверждения от заказчика.');
+    // Show info after a short delay to allow UI to update
+    setTimeout(() => {
+      alert('Запрос на подписку отправлен! Ожидайте подтверждения от заказчика.');
+    }, 50);
   };
 
-  const handleConfirmSubscription = (executorId: string) => {
+  const handleRejectSubscription = async (executorId: string) => {
+    // Find executor
+    const executor = allUsers.find(u => u.id === executorId);
+    if (!executor) return;
+
+    // Create notification for Executor
+    const notification: Notification = {
+      id: Date.now().toString(),
+      type: 'warning',
+      title: 'Запрос на подписку отклонен',
+      message: `Заказчик ${user.name} отклонил ваш запрос на подписку.`,
+      date: new Date().toISOString(),
+      read: false
+    };
+
+    // Update Executor: status=none, remove request, add notification
+    const updatedExecutor = {
+      ...executor,
+      subscriptionStatus: 'none' as const,
+      subscriptionRequestToCustomerId: undefined,
+      notifications: [notification, ...(executor.notifications || [])]
+    };
+
+    // Update Customer (me) to signal rejection (Self-Repair Channel)
+    // We use subscriptionRequestToCustomerId on Customer as a temporary signal channel
+    const updatedCustomer = {
+      ...user,
+      subscriptionRequestToCustomerId: `REJECTED:${executorId}`
+    };
+
+    // Update All Users
+    const updatedAllUsers = allUsers.map(u => {
+      if (u.id === executorId) return updatedExecutor;
+      if (u.id === user.id) return updatedCustomer;
+      return u;
+    });
+
+    // 1. Optimistic UI Update
+    setAllUsers(updatedAllUsers);
+    updateUser(updatedCustomer); // Update local user state immediately
+    setTimeout(() => alert('Запрос на подписку отклонен.'), 50);
+
+    // 2. Background DB Update
+    const supabase = getSupabase();
+    if (supabase) {
+      resolveProfileIdColumn(supabase).then(col => {
+        // We try to update Executor (might fail due to RLS) AND Customer (should succeed)
+        Promise.all([
+          supabase.from('profiles').update(userToProfileUpdate(updatedExecutor)).eq(col, executorId)
+            .then(({ error }) => {
+              if (error) console.warn('Failed to update executor profile (RLS?):', error);
+            }),
+          supabase.from('profiles').update(userToProfileUpdate(updatedCustomer)).eq(col, user.id)
+            .then(({ error }) => {
+               if (error) console.error('Failed to update customer profile:', error);
+            })
+        ]).then();
+      });
+    }
+  };
+
+  const handleConfirmSubscription = async (executorId: string) => {
     // Find executor
     const executor = allUsers.find(u => u.id === executorId);
     if (!executor) return;
@@ -509,12 +1303,22 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
       if (u.id === user.id) return updatedCustomer;
       return u;
     });
-    localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedAllUsers));
 
-    // Force update
+    // 1. Optimistic UI Update
     setAllUsers(updatedAllUsers);
     updateUser(updatedCustomer);
-    alert('Подписка подтверждена!');
+    setTimeout(() => alert('Подписка подтверждена!'), 50);
+
+    // 2. Background DB Update
+    const supabase = getSupabase();
+    if (supabase) {
+      resolveProfileIdColumn(supabase).then(col => {
+        Promise.all([
+          supabase.from('profiles').update(userToProfileUpdate(updatedExecutor)).eq(col, executorId),
+          supabase.from('profiles').update(userToProfileUpdate(updatedCustomer)).eq(col, user.id)
+        ]).then();
+      });
+    }
   };
 
   const handleRenewSubscription = () => {
@@ -528,23 +1332,22 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
     return allUsers.find(u => u.role === UserRole.EXECUTOR && u.subscribedToCustomerId === customerId && u.subscriptionStatus === 'active');
   };
 
-  const handleDismissNotification = (notificationId: string) => {
+  const handleDismissNotification = async (notificationId: string) => {
     const updatedNotifications = (user.notifications || []).filter(n => n.id !== notificationId);
     const updatedUser = { ...user, notifications: updatedNotifications };
 
-    // Update allUsers and localStorage
     const updatedAllUsers = allUsers.map(u => {
       if (u.id === user.id) return updatedUser;
       return u;
     });
 
     setAllUsers(updatedAllUsers);
-    localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedAllUsers));
-    updateUser(updatedUser);
+    await updateUser(updatedUser);
   };
 
-  const handleCancelSubscription = () => {
+  const handleCancelSubscription = async () => {
     if (!user.id) return;
+    const supabase = getSupabase();
 
     // Handle Customer cancelling Executor
     if (user.role === UserRole.CUSTOMER) {
@@ -579,18 +1382,35 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
         subscribedExecutorId: undefined
       };
 
+      // 1. Optimistic UI Update - IMMEDIATELY apply changes locally
       const updatedAllUsers = allUsers.map(u => {
         if (u.id === activeSubscriber.id) return updatedExecutor;
         if (u.id === user.id) return updatedCustomer;
         return u;
       });
       setAllUsers(updatedAllUsers);
-      localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedAllUsers));
-      updateUser(updatedCustomer);
-
+      updateUser(updatedCustomer); // Persist to local context/storage immediately
+      
+      // Close modal and UI feedback immediately
       setIsCancelSubscriptionModalOpen(false);
       setCancelSubscriptionReason('');
-      alert('Подписка помощника отменена.');
+      
+      // 2. Background DB Update (Don't wait for this to update UI)
+      if (supabase) {
+        resolveProfileIdColumn(supabase).then(col => {
+          Promise.all([
+            supabase.from('profiles').update(userToProfileUpdate(updatedExecutor)).eq(col, updatedExecutor.id),
+            supabase.from('profiles').update(userToProfileUpdate(updatedCustomer)).eq(col, updatedCustomer.id)
+          ]).then(() => {
+             // Optional: Silent success log
+             console.log('Subscription cancelled in DB');
+          }).catch(err => {
+             console.error('Error cancelling subscription in DB:', err);
+             // Only revert UI if absolutely necessary, but usually better to retry or show error toast
+             // For now, we trust the optimistic update
+          });
+        });
+      }
     }
     // Handle Executor cancelling their own subscription
     else if (user.role === UserRole.EXECUTOR) {
@@ -636,23 +1456,52 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
       });
 
       setAllUsers(updatedAllUsers);
-      localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedAllUsers));
       updateUser(updatedExecutor);
-
       setIsCancelSubscriptionModalOpen(false);
       setCancelSubscriptionReason('');
-      alert('Ваша подписка отменена.');
+      setTimeout(() => alert('Ваша подписка отменена.'), 50);
+
+      if (supabase) {
+        resolveProfileIdColumn(supabase).then(col => {
+           const promises = [supabase.from('profiles').update(userToProfileUpdate(updatedExecutor)).eq(col, updatedExecutor.id)];
+           if (updatedCustomer) {
+             promises.push(supabase.from('profiles').update(userToProfileUpdate(updatedCustomer)).eq(col, updatedCustomer.id));
+           }
+           Promise.all(promises).then();
+        });
+      }
     }
   };
 
   const formatAddress = (address?: string) => {
     if (!address) return 'Адрес не указан';
-    // Remove country and postal code for cleaner display
     return address
-      .replace(/, \d{6}/, '') // Remove zip code
-      .replace(/, Россия$/, '') // Remove country at end
-      .replace(/^Россия, /, '') // Remove country at start
-      .replace(/Россия, /, ''); // Remove country in middle
+      .replace(/, \d{6}/, '')
+      .replace(/, Россия$/, '')
+      .replace(/^Россия, /, '')
+      .replace(/Россия, /, '');
+  };
+
+  const extractCity = (address?: string) => {
+    if (!address) return 'Город не указан';
+    const cleaned = formatAddress(address);
+    const parts = cleaned.split(',').map(p => p.trim()).filter(Boolean);
+    return parts[0] || cleaned;
+  };
+
+  const haversineDistanceKm = (a: Location, b: Location) => {
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const R = 6371;
+    const dLat = toRad(b.lat - a.lat);
+    const dLon = toRad(b.lng - a.lng);
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+    const h =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1) * Math.cos(lat2) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+    return Math.round(R * c);
   };
 
   const getStatusColor = (status: OrderStatus) => {
@@ -689,7 +1538,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
       if (daysLeft <= 0) {
         // Expired
         const updatedUser = { ...user, subscriptionStatus: 'expired' as const };
-        localStorage.setItem('bez_barrierov_user', JSON.stringify(updatedUser));
+        updateUser(updatedUser);
         // Force reload logic or state update would go here
       }
     }
@@ -805,9 +1654,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
           return (
             <div className="mb-6 space-y-4">
               {pendingRequests.map(requester => (
-                <div key={requester.id} className="bg-white p-4 rounded-2xl shadow-lg border border-yellow-200 flex items-center justify-between animate-in slide-in-from-top-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600">
+                <div key={requester.id} className="bg-white p-4 rounded-2xl shadow-lg border border-yellow-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in slide-in-from-top-4">
+                  <div className="flex items-center gap-4 w-full sm:w-auto">
+                    <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600 shrink-0">
                       <i className="fas fa-crown"></i>
                     </div>
                     <div>
@@ -815,12 +1664,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                       <p className="text-sm text-gray-600">Помощник <strong>{requester.name}</strong> хочет оформить подписку.</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleConfirmSubscription(requester.id)}
-                    className="bg-careem-primary text-white font-bold py-2 px-6 rounded-xl hover:bg-green-700 transition shadow-md"
-                  >
-                    Подтвердить
-                  </button>
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <button
+                      onClick={() => handleRejectSubscription(requester.id)}
+                      className="flex-1 sm:flex-none bg-red-50 text-red-600 font-bold py-3 sm:py-2 px-4 rounded-xl hover:bg-red-100 transition shadow-sm border border-red-100 text-center justify-center"
+                    >
+                      Отказать
+                    </button>
+                    <button
+                      onClick={() => handleConfirmSubscription(requester.id)}
+                      className="flex-1 sm:flex-none bg-careem-primary text-white font-bold py-3 sm:py-2 px-4 rounded-xl hover:bg-green-700 transition shadow-md text-center justify-center"
+                    >
+                      Подтвердить
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1040,7 +1897,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 ) : null}
               </div>
 
-              {user.role === UserRole.EXECUTOR && openOrders.length > 0 && !showOpenOrders && (
+              {user.role === UserRole.EXECUTOR && openOrders.length > 0 && !showOpenOrders && orders.every(o => o.status !== OrderStatus.CONFIRMED) && (
                 <div
                   onClick={() => {
                     navigate('/orders/open');
@@ -1061,6 +1918,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   </div>
                 </div>
               )}
+
+
 
               {user.role === UserRole.EXECUTOR && showOpenOrders && (
                 <button
@@ -1139,9 +1998,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 <div className="grid grid-cols-1 gap-4">
                   {/* Active Orders */}
                   {activeOrders.map(order => (
-                    <div key={order.id} className={`${user.role === UserRole.EXECUTOR && order.executorId === user.id ? 'bg-[#0B1220]/60 border-[#1B2D4F] ring-1 ring-[#13213A]' : 'bg-[#0B1220]/60 border-white/10'} p-0 rounded-3xl shadow-[0_18px_60px_rgba(0,0,0,0.35)] border overflow-hidden hover:bg-[#0B1220]/70 transition duration-300 backdrop-blur-xl`}>
+                    <div key={order.id} className="p-0 rounded-3xl shadow-[0_0_40px_rgba(255,255,255,0.05)] border-0 overflow-hidden transition duration-300 backdrop-blur-xl">
                       {/* Inner Card Container with Inner Shadow */}
-                      <div className="m-2 p-5 rounded-2xl bg-[#0B1220]/70 border border-white/10 relative">
+                      <div className="m-0 p-6 rounded-3xl bg-[#0B1220]/80 border border-white/10 relative shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)]">
 
                         {/* Header: Icon + Type + Date */}
                         <div className="flex justify-between items-start mb-6">
@@ -1159,7 +2018,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                           </div>
                           <span
                             className={[
-                              'absolute top-4 right-4 text-[11px] leading-none font-black uppercase tracking-wide whitespace-nowrap drop-shadow-[0_6px_18px_rgba(0,0,0,0.55)]',
+                              'absolute top-3 right-3 text-[9px] leading-none font-black uppercase tracking-wide whitespace-nowrap drop-shadow-[0_6px_18px_rgba(0,0,0,0.55)]',
                               getStatusColor(order.status),
                               order.status === OrderStatus.PENDING ? 'animate-pulse' : ''
                             ].join(' ')}
@@ -1169,7 +2028,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                         </div>
 
                         {/* Body: Price & Info */}
-                        <div className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/10 mb-6">
+                        <div className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/10">
                           <div>
                             <p className="text-[10px] uppercase text-slate-400 font-bold mb-1 tracking-wider">Стоимость услуги</p>
                             <p className="text-2xl font-black text-slate-100">{order.totalPrice} <span className="text-sm font-medium text-slate-400">₽</span></p>
@@ -1184,6 +2043,35 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                             </button>
                           </div>
                         </div>
+
+                        {/* Visual Distinction for CONFIRMED Orders (Executor) */}
+                        {user.role === UserRole.EXECUTOR && order.status === OrderStatus.CONFIRMED && (
+                          <div className="mt-4 p-4 bg-green-900/20 border border-green-500/30 rounded-2xl relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/10 rounded-full blur-2xl -mr-8 -mt-8"></div>
+                            <div className="relative z-10">
+                                <h5 className="text-green-400 font-bold text-sm mb-2 flex items-center gap-2">
+                                  <i className="fas fa-check-circle"></i> Заказ взят в работу
+                                </h5>
+                                <div className="bg-white/5 rounded-xl p-3 border border-white/10">
+                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide mb-2">Ваши действия:</p>
+                                 <ul className="text-xs text-slate-300 space-y-2">
+                                   <li className="flex items-start gap-2">
+                                     <span className="bg-white/10 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-400 shrink-0">1</span>
+                                     <span>Свяжитесь с заказчиком</span>
+                                   </li>
+                                   <li className="flex items-start gap-2">
+                                     <span className="bg-white/10 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-400 shrink-0">2</span>
+                                     <span>Выполните услугу</span>
+                                   </li>
+                                   <li className="flex items-start gap-2">
+                                     <span className="bg-white/10 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-400 shrink-0">3</span>
+                                     <span>Дождитесь "Подтвердить выполнение" заказчиком</span>
+                                   </li>
+                                 </ul>
+                               </div>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Actions Footer */}
                         <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-white/10">
@@ -1208,9 +2096,42 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                           )}
 
                           {user.role === UserRole.CUSTOMER && order.status === OrderStatus.PENDING && (
-                            <button onClick={() => handleUpdateOrderStatus(order.id, OrderStatus.CANCELLED)} className="w-full bg-red-50 text-red-600 border border-red-100 py-2.5 rounded-xl hover:bg-red-100 transition font-bold text-sm flex items-center justify-center gap-2" title="Отменить">
-                              <i className="fas fa-times"></i> Отменить поиск
-                            </button>
+                            (() => {
+                              const executor = allUsers.find(u => u.id === order.executorId);
+                              const hasSubscriptionRequest = executor?.subscriptionRequestToCustomerId === user.id;
+
+                              if (hasSubscriptionRequest && executor) {
+                                return (
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (window.confirm(`Подтвердить подписку от ${executor.name} и удалить этот заказ?`)) {
+                                        await handleConfirmSubscription(executor.id);
+                                        await handleDeleteOrder(order.id);
+                                      }
+                                    }}
+                                    className="w-full bg-careem-primary text-white border border-careem-primary py-2.5 rounded-xl hover:bg-green-700 transition font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-green-200"
+                                    title="Подтвердить подписку"
+                                  >
+                                    <i className="fas fa-user-check"></i> Запрос на подписку от {executor.name}
+                                  </button>
+                                );
+                              }
+
+                              return (
+                                <button
+                                  onClick={async () => {
+                                    if (window.confirm('Вы уверены, что хотите отменить этот заказ и удалить его?')) {
+                                      await handleDeleteOrder(order.id);
+                                    }
+                                  }}
+                                  className="w-full bg-red-50 text-red-600 border border-red-100 py-2.5 rounded-xl hover:bg-red-100 transition font-bold text-sm flex items-center justify-center gap-2"
+                                  title="Отменить и удалить"
+                                >
+                                  <i className="fas fa-times"></i> Отменить запрос к помощнику
+                                </button>
+                              );
+                            })()
                           )}
 
                           {user.role === UserRole.CUSTOMER && order.status === OrderStatus.CONFIRMED && (
@@ -1239,24 +2160,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                           )}
                         </div>
 
-                        {/* Expanded Content Area (Address, Audio, etc.) */}
+                        {/* Expanded Content Area (Audio, etc.) */}
                         <div className="space-y-4 mt-2">
-                          {/* Address for Open Orders Only (City Only) */}
-                          {(showOpenOrders || user.role === UserRole.CUSTOMER) && (
-                            <div className="w-full mt-2 p-3 bg-white/5 rounded-2xl border border-white/10 flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-2xl bg-[#13213A] flex items-center justify-center text-careem-primary border border-[#1B2D4F]">
-                                <i className="fas fa-map-marker-alt text-xs"></i>
-                              </div>
-                              <span className="font-medium text-slate-300 text-sm line-clamp-1">
-                                {order.locationFrom
-                                  ? formatAddress(order.locationFrom.address).split(',')[0]
-                                  : order.generalLocation
-                                    ? formatAddress(order.generalLocation.address).split(',')[0]
-                                    : 'Город не указан'}
-                              </span>
-                            </div>
-                          )}
-
                           {order.status === OrderStatus.REJECTED && order.rejectionReason && (
                             <div className="mt-2 w-full">
                               <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-800">
@@ -1318,9 +2223,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                               const executor = allUsers.find(u => u.id === order.executorId);
                               if (!executor) return null;
                               return (
-                                <div className="w-full mt-4 p-4 bg-careem-light rounded-xl border border-green-100 animate-in fade-in duration-500">
+                                <div className="w-full mt-4 p-4 bg-white/5 rounded-2xl border border-white/10 animate-in fade-in duration-500">
                                   <div className="flex items-center justify-between mb-3">
-                                    <h5 className="font-bold text-sm text-careem-dark">Исполнитель назначен</h5>
+                                    <h5 className="font-bold text-sm text-slate-300">Исполнитель назначен</h5>
                                     <span className={`text-xs font-black uppercase tracking-wide ${getStatusColor(order.status)}`}>
                                       {getStatusLabel(order.status)}
                                     </span>
@@ -1333,19 +2238,19 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                         alt={executor.name}
                                         className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-md max-w-full"
                                       />
-                                      {executor.rating && (
+                                      {(realRatings[executor.id] || executor.rating) && (
                                         <div className="absolute -bottom-2 -right-2 bg-white px-1.5 py-0.5 rounded-lg shadow-sm border border-gray-100 flex items-center gap-1">
                                           <i className="fas fa-star text-yellow-400 text-[10px]"></i>
-                                          <span className="text-xs font-bold text-gray-700">{executor.rating}</span>
+                                          <span className="text-xs font-bold text-gray-700">{realRatings[executor.id] || executor.rating}</span>
                                         </div>
                                       )}
                                     </div>
 
                                     <div className="flex-grow">
-                                      <h4 className="font-bold text-gray-900 text-lg leading-tight mb-1">{executor.name}</h4>
+                                      <h4 className="font-bold text-slate-100 text-lg leading-tight mb-1">{executor.name}</h4>
 
                                       {executor.description && (
-                                        <p className="text-xs text-gray-500 mb-2 line-clamp-2">{executor.description}</p>
+                                        <p className="text-xs text-slate-300 mb-2 line-clamp-2">{executor.description}</p>
                                       )}
 
                                       <div className="flex flex-wrap gap-2 mt-2">
@@ -1390,7 +2295,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                         <img src={responder.avatar || `https://ui-avatars.com/api/?name=${responder.name}`} alt={responder.name} className="w-10 h-10 rounded-full object-cover max-w-full" />
                                         <div>
                                           <p className="font-bold text-sm text-gray-900">{responder.name}</p>
-                                          <p className="text-xs text-careem-primary font-bold">★ {responder.rating}</p>
+                                          <div className="flex items-center gap-1 bg-white px-1.5 py-0.5 rounded-lg shadow-sm border border-gray-100 mt-1 w-fit">
+                                            <i className="fas fa-star text-yellow-400 text-[10px]"></i>
+                                            <span className="text-xs font-bold text-gray-700">{realRatings[responder.id] || responder.rating || '0.0'}</span>
+                                          </div>
                                         </div>
                                       </div>
                                       <button
@@ -1431,37 +2339,41 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                           <div key={order.id} className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
                             <div
                               onClick={() => setExpandedOrderId(expandedOrderId === order.id ? null : order.id)}
-                              className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition"
+                              className="p-4 flex flex-col md:flex-row md:items-center justify-between cursor-pointer hover:bg-gray-100 transition gap-4"
                             >
                               <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-gray-500">
+                                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-gray-500 shrink-0">
                                   <i className="fas fa-check"></i>
                                 </div>
-                                <div>
-                                  <h4 className="font-bold text-gray-700 text-sm">{order.serviceType}</h4>
+                                <div className="min-w-0">
+                                  <h4 className="font-bold text-gray-700 text-sm truncate">{order.serviceType}</h4>
                                   <p className="text-xs text-gray-500">{order.date}</p>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-4">
-                                <span className="text-sm font-bold text-gray-600">{order.totalPrice} ₽</span>
-                                <span className={`text-[11px] leading-none font-black uppercase tracking-wide whitespace-nowrap ${getStatusColor(order.status)}`}>
-                                  {getStatusLabel(order.status)}
-                                </span>
-                                {user.role === UserRole.CUSTOMER && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (window.confirm('Вы уверены, что хотите удалить этот заказ из истории?')) {
-                                        handleDeleteOrder(order.id);
-                                      }
-                                    }}
-                                    className="w-8 h-8 flex items-center justify-center bg-gray-100 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
-                                    title="Удалить заказ"
-                                  >
-                                    <i className="fas fa-trash-alt"></i>
-                                  </button>
-                                )}
-                                <i className={`fas fa-chevron-down text-gray-400 transition-transform ${expandedOrderId === order.id ? 'rotate-180' : ''}`}></i>
+                              <div className="flex items-center justify-between md:justify-end gap-4 w-full md:w-auto">
+                                <div className="flex items-center gap-4">
+                                  <span className="text-sm font-bold text-gray-600 whitespace-nowrap">{order.totalPrice} ₽</span>
+                                  <span className={`text-[11px] leading-none font-black uppercase tracking-wide whitespace-nowrap ${getStatusColor(order.status)}`}>
+                                    {getStatusLabel(order.status)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {user.role === UserRole.CUSTOMER && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (window.confirm('Вы уверены, что хотите удалить этот заказ из истории?')) {
+                                          handleDeleteOrder(order.id);
+                                        }
+                                      }}
+                                      className="w-8 h-8 flex items-center justify-center bg-gray-100 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition shrink-0"
+                                      title="Удалить заказ"
+                                    >
+                                      <i className="fas fa-trash-alt"></i>
+                                    </button>
+                                  )}
+                                  <i className={`fas fa-chevron-down text-gray-400 transition-transform shrink-0 ${expandedOrderId === order.id ? 'rotate-180' : ''}`}></i>
+                                </div>
                               </div>
                             </div>
 
@@ -1533,10 +2445,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                     </div>
                   )}
                 </div>
+              ) : isOrdersLoading ? (
+                <div className="bg-white p-12 rounded-2xl border border-dashed border-gray-300 text-center">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-careem-primary mx-auto mb-4"></div>
+                  <p className="text-gray-500">Идет обновление базы активных заказов...</p>
+                </div>
               ) : (
                 <div className="bg-white p-12 rounded-2xl border border-dashed border-gray-300 text-center">
-                  <i className="fas fa-calendar-times text-4xl text-gray-300 mb-4"></i>
-                  <p className="text-gray-500">У вас пока нет активных заказов</p>
+                  <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i className="fas fa-folder-open text-4xl text-gray-300"></i>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">Активных заказов нет</h3>
+                  <p className="text-gray-500">На данный момент список заказов пуст.</p>
                 </div>
               )}
             </div>
@@ -1544,7 +2464,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
           {/* Order Details Modal */}
           {selectedOrderDetails && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 modal-open">
               <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                   <div>
@@ -1612,9 +2532,33 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   <div className="mb-6">
                     <h4 className="text-sm font-bold text-gray-900 mb-2">Маршрут и адрес</h4>
                     {selectedOrderDetails.locationFrom && selectedOrderDetails.locationTo ? (
-                      <OrderMap order={selectedOrderDetails} hideInfo />
+                      <>
+                        <OrderMap order={selectedOrderDetails} hideInfo />
+                        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                          <div className="bg-gray-50 rounded-xl border border-gray-100 p-3">
+                            <p className="text-[11px] font-bold uppercase text-gray-400 mb-1">Откуда</p>
+                            <p className="text-gray-800">
+                              {formatAddress(selectedOrderDetails.locationFrom.address)}
+                            </p>
+                          </div>
+                          <div className="bg-gray-50 rounded-xl border border-gray-100 p-3">
+                            <p className="text-[11px] font-bold uppercase text-gray-400 mb-1">Куда</p>
+                            <p className="text-gray-800">
+                              {formatAddress(selectedOrderDetails.locationTo.address)}
+                            </p>
+                          </div>
+                        </div>
+                      </>
                     ) : selectedOrderDetails.generalLocation ? (
-                      <OrderMap order={selectedOrderDetails} hideInfo />
+                      <>
+                        <OrderMap order={selectedOrderDetails} hideInfo />
+                        <div className="mt-3 bg-gray-50 rounded-xl border border-gray-100 p-3 text-sm">
+                          <p className="text-[11px] font-bold uppercase text-gray-400 mb-1">Адрес</p>
+                          <p className="text-gray-800">
+                            {formatAddress(selectedOrderDetails.generalLocation.address)}
+                          </p>
+                        </div>
+                      </>
                     ) : (
                       <p className="text-sm text-gray-400 italic">Адрес уточняется у заказчика</p>
                     )}
@@ -1637,11 +2581,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
           {/* Rejection Modal */}
           {rejectingOrderId && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 modal-open">
               <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
                 <h3 className="text-lg font-bold text-gray-900 mb-4">Укажите причину отказа</h3>
                 <textarea
-                  className="w-full bg-gray-50 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-careem-primary mb-4 h-32 resize-none"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-careem-primary mb-4 h-32 resize-none text-gray-900 placeholder-gray-400"
                   placeholder="Например: занят в это время, не оказываю данную услугу..."
                   value={rejectionReason}
                   onChange={(e) => setRejectionReason(e.target.value)}
@@ -1671,7 +2615,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
           {/* Completion & Review Modal */}
           {completingOrderId && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 modal-open">
               <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl scale-100">
                 <div className="text-center mb-6">
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-600 mx-auto mb-4">
@@ -1696,7 +2640,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   </div>
 
                   <textarea
-                    className="w-full bg-gray-50 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-green-500 min-h-[100px] resize-none text-sm"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-green-500 min-h-[100px] resize-none text-sm text-gray-900 placeholder-gray-400"
                     placeholder="Напишите пару слов о работе специалиста..."
                     value={reviewText}
                     onChange={(e) => setReviewText(e.target.value)}
@@ -1727,7 +2671,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
           {/* Customer Details Modal */}
           {viewingCustomer && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 modal-open">
               <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl scale-100 relative overflow-hidden">
                 <button
                   onClick={() => setViewingCustomer(null)}
@@ -1826,7 +2770,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
           {/* Cancel Subscription Modal */}
           {isCancelSubscriptionModalOpen && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 modal-open">
               <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl scale-100">
                 <div className="text-center mb-6">
                   <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center text-red-500 mx-auto mb-4">
@@ -1843,7 +2787,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 <div className="mb-6">
                   <label className="block text-sm font-bold text-gray-700 mb-2">Укажите причину отмены <span className="text-red-500">*</span></label>
                   <textarea
-                    className="w-full bg-gray-50 border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-red-500 min-h-[100px] resize-none text-sm"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-red-500 min-h-[100px] resize-none text-sm text-gray-900 placeholder-gray-400"
                     placeholder={user.role === UserRole.CUSTOMER ? "Например: помощник не выходит на связь..." : "Например: изменились обстоятельства..."}
                     value={cancelSubscriptionReason}
                     onChange={(e) => setCancelSubscriptionReason(e.target.value)}
@@ -1911,313 +2855,26 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
             </div>
           )}
 
-          {activeTab === 'profile' && (
-            <div ref={profileEditorRef} className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-gray-900">
-              <h3 className="text-lg font-bold text-gray-900 mb-6">Редактирование профиля</h3>
-              <form className="space-y-6" onSubmit={(e) => {
-                e.preventDefault();
-                // @ts-ignore
-                const name = e.target.name.value;
-                // @ts-ignore
-                const email = e.target.email.value;
-                if (user.role === UserRole.EXECUTOR && (!canPublishProfile || profileVerificationStatus === 'pending')) return;
+          {activeTab === 'profile' && renderProfileEditor()}
 
-                const customServices = servicesState.filter(s => s.enabled).map(s => ({
-                  serviceId: s.serviceId,
-                  price: Number(s.price),
-                  enabled: true
-                }));
-
-                const newUser = {
-                  ...user,
-                  name,
-                  email,
-                  description: profileDescription,
-                  profileVerificationStatus: user.role === UserRole.EXECUTOR ? 'pending' : (user.profileVerificationStatus || 'none'),
-                  customServices,
-                  locationCoordinates: locationCoords,
-                  coverageRadius: coverageRadius,
-                  avatar: avatarPreview,
-                  vehiclePhoto: vehiclePhotoPreview
-                };
-
-                // Update localStorage
-                const storedUsers = JSON.parse(localStorage.getItem('bez_barrierov_users') || '[]');
-                const newUsers = storedUsers.map((u: User) => u.id === user.id ? newUser : u);
-                localStorage.setItem('bez_barrierov_users', JSON.stringify(newUsers));
-                localStorage.setItem('bez_barrierov_user', JSON.stringify(newUser));
-
-                setHasUnsavedChanges(false);
-                updateUser(newUser);
-                setProfileVerificationStatus(newUser.profileVerificationStatus || 'none');
-
-                if (user.role === UserRole.EXECUTOR) {
-                  if (verificationTimerRef.current !== null) {
-                    window.clearTimeout(verificationTimerRef.current);
-                  }
-                  verificationTimerRef.current = window.setTimeout(() => {
-                    const verifiedUser = { ...newUser, profileVerificationStatus: 'verified' as const };
-                    const stored = JSON.parse(localStorage.getItem('bez_barrierov_users') || '[]');
-                    const updatedUsers = stored.map((u: User) => u.id === user.id ? verifiedUser : u);
-                    localStorage.setItem('bez_barrierov_users', JSON.stringify(updatedUsers));
-                    localStorage.setItem('bez_barrierov_user', JSON.stringify(verifiedUser));
-                    updateUser(verifiedUser);
-                    setProfileVerificationStatus('verified');
-                    verificationTimerRef.current = null;
-                  }, 10_000);
-                }
-              }}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Полное имя</label>
-                    <input name="name" type="text" defaultValue={user.name} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-careem-primary outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
-                      {user.id.startsWith('telegram-') ? 'Профиль' : 'Email'}
-                    </label>
-                    <input name="email" type="email" defaultValue={user.email} onChange={() => setHasUnsavedChanges(true)} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-careem-primary outline-none" />
-                  </div>
-                </div>
-
-                {user.role === UserRole.EXECUTOR && (
-                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-4">
-                      Желаемое место работы и радиус охвата <span className="text-red-500">*</span>
-                    </label>
-                    {locationAddress && (
-                      <p className="text-sm text-gray-700 mb-3 font-medium bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
-                        <i className="fas fa-map-marker-alt text-red-500 mr-2"></i>
-                        {locationAddress}
-                      </p>
-                    )}
-                    <div className="h-64 rounded-xl overflow-hidden mb-4 border border-gray-300 relative z-0">
-                      <MapContainer
-                        center={locationCoords ? [locationCoords.lat, locationCoords.lng] : [55.75, 37.61]}
-                        zoom={10}
-                        style={{ width: '100%', height: '100%' }}
-                      >
-                        <TileLayer
-                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                          keepBuffer={4}
-                        />
-                        <MapInvalidator />
-
-                        <DashboardMapEvents
-                          setLocationCoords={setLocationCoords}
-                          setLocationAddress={setLocationAddress}
-                          setHasUnsavedChanges={setHasUnsavedChanges}
-                        />
-
-                        {locationCoords && (
-                          <>
-                            <Marker position={[locationCoords.lat, locationCoords.lng]} />
-                            {coverageRadius && (
-                              <Circle
-                                center={[locationCoords.lat, locationCoords.lng]}
-                                radius={coverageRadius * 1000}
-                                pathOptions={{ fillColor: '#828282', color: '#828282', fillOpacity: 0.5, weight: 2 }}
-                              />
-                            )}
-                          </>
-                        )}
-                      </MapContainer>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Радиус (км): {coverageRadius}</label>
-                      <input
-                        type="range"
-                        min="1"
-                        max="50"
-                        value={coverageRadius}
-                        onChange={(e) => {
-                          setCoverageRadius(Number(e.target.value));
-                          setHasUnsavedChanges(true);
-                        }}
-                        className="w-full"
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">Кликните на карту, чтобы установить центр рабочей зоны.</p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Фотография профиля</label>
-                    <label className="mt-1 flex justify-center items-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl hover:border-careem-primary transition cursor-pointer relative group block w-full h-48 overflow-hidden bg-gray-50">
-                      {avatarPreview ? (
-                        <>
-                          <img src={avatarPreview} alt="Avatar" className="absolute inset-0 w-full h-full object-contain bg-gray-50 opacity-100 group-hover:opacity-50 transition-opacity duration-300" />
-                          <div className="relative z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center">
-                            <i className="fas fa-camera text-gray-800 text-3xl mb-2"></i>
-                            <span className="text-sm font-bold text-gray-800 bg-white/80 px-3 py-1 rounded-full">Изменить фото</span>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="space-y-1 text-center w-full relative z-10">
-                          <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                          <div className="flex text-sm text-gray-600 justify-center">
-                            <span className="relative rounded-md font-medium text-careem-primary hover:text-green-500 focus-within:outline-none">
-                              <span>Загрузить фото</span>
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500">PNG, JPG, GIF до 10MB</p>
-                        </div>
-                      )}
-                      <input type="file" className="sr-only" accept="image/*" onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            const base64String = reader.result as string;
-                            setAvatarPreview(base64String);
-                            setHasUnsavedChanges(true);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }} />
-                    </label>
-                  </div>
-
-                  {user.role === UserRole.EXECUTOR && (
-                    <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase mb-2">Фото транспорта <span className="text-gray-300 font-normal">(не обязательно)</span></label>
-                      <label className="mt-1 flex justify-center items-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl hover:border-careem-primary transition cursor-pointer relative group block w-full h-48 overflow-hidden bg-gray-50">
-                        {vehiclePhotoPreview ? (
-                          <>
-                            <img src={vehiclePhotoPreview} alt="Vehicle" className="absolute inset-0 w-full h-full object-contain bg-gray-50 opacity-100 group-hover:opacity-50 transition-opacity duration-300" />
-                            <div className="relative z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center">
-                              <i className="fas fa-camera text-gray-800 text-3xl mb-2"></i>
-                              <span className="text-sm font-bold text-gray-800 bg-white/80 px-3 py-1 rounded-full">Изменить фото</span>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="space-y-1 text-center w-full relative z-10">
-                            <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                              <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            <div className="flex text-sm text-gray-600 justify-center">
-                              <span className="relative rounded-md font-medium text-careem-primary hover:text-green-500 focus-within:outline-none">
-                                <span>Загрузить фото</span>
-                              </span>
-                            </div>
-                            <p className="text-xs text-gray-500">PNG, JPG, GIF до 10MB</p>
-                          </div>
-                        )}
-                        <input type="file" className="sr-only" accept="image/*" onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              const base64String = reader.result as string;
-                              setVehiclePhotoPreview(base64String);
-                              setHasUnsavedChanges(true);
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }} />
-                      </label>
-                    </div>
-                  )}
-                </div>
-
-                {user.role === UserRole.EXECUTOR && (
-                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase mb-4">
-                      Услуги и тарифы <span className="text-red-500">*</span>
-                    </label>
-                    <div className="bg-gray-50 rounded-xl p-4 space-y-4 border border-gray-200">
-                      {SERVICE_TYPES.map(service => {
-                        const state = servicesState.find(s => s.serviceId === service.id)!;
-                        return (
-                          <div key={service.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-100">
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                id={`service-${service.id}`}
-                                checked={state.enabled}
-                                onChange={(e) => {
-                                  handleServiceChange(service.id, 'enabled', e.target.checked);
-                                  setHasUnsavedChanges(true);
-                                }}
-                                className="w-5 h-5 text-careem-primary rounded focus:ring-careem-primary border-gray-300"
-                              />
-                              <label htmlFor={`service-${service.id}`} className="text-sm font-medium text-gray-700 cursor-pointer select-none">
-                                {service.name}
-                              </label>
-                            </div>
-
-                            {state.enabled && (
-                              <div className="flex items-center gap-2 sm:justify-end">
-                                <input
-                                  type="number"
-                                  value={state.price}
-                                  onChange={(e) => {
-                                    handleServiceChange(service.id, 'price', e.target.value);
-                                    setHasUnsavedChanges(true);
-                                  }}
-                                  className="w-24 px-2 py-1 text-right border border-gray-300 rounded-md focus:ring-careem-primary focus:border-careem-primary text-sm text-gray-900 placeholder-gray-400"
-                                  placeholder={service.pricePerHour.toString()}
-                                />
-                                <span className="text-sm text-gray-500">₽/час</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
-                    О себе {user.role === UserRole.EXECUTOR && <span className="text-red-500">*</span>}
-                  </label>
-                  <textarea name="description" rows={4} value={profileDescription} onChange={(e) => { setProfileDescription(e.target.value); setHasUnsavedChanges(true); }} className="w-full bg-gray-50 border-gray-200 rounded-xl py-3 px-4 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-careem-primary outline-none" placeholder="Расскажите о своем опыте и навыках..."></textarea>
-                </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-4 gap-4">
-                  {user.role === UserRole.EXECUTOR ? (
-                    <div className="flex flex-col gap-1">
-                      {profileVerificationStatus !== 'none' && (
-                        <div className={`text-sm font-semibold flex items-center gap-2 ${profileVerificationStatus === 'verified' ? 'text-green-600' : 'text-amber-600'}`}>
-                          {profileVerificationStatus === 'verified' ? (
-                            <i className="fas fa-circle-check"></i>
-                          ) : (
-                            <i className="fas fa-clock"></i>
-                          )}
-                          {profileVerificationStatus === 'verified' ? 'Проверен' : 'Профиль на проверке'}
-                        </div>
-                      )}
-                      <p className="text-xs text-gray-500">
-                        Поля, отмеченные <span className="text-red-500">*</span>, обязательны для заполнения.
-                      </p>
-                    </div>
-                  ) : (
-                    <div />
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={(user.role === UserRole.EXECUTOR && !canPublishProfile) || profileVerificationStatus === 'pending'}
-                    className="w-full sm:w-auto bg-careem-primary text-white font-bold py-3 px-8 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-careem-primary"
-                  >
-                    {user.role === UserRole.EXECUTOR
-                      ? (profileVerificationStatus === 'verified' && !hasUnsavedChanges ? 'Опубликовано' : 'Опубликовать')
-                      : 'Сохранить изменения'}
-                  </button>
-                </div>
-              </form>
+          {isProfileModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200 modal-open">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative animate-in zoom-in-95 duration-200">
+                <button
+                  onClick={() => setIsProfileModalOpen(false)}
+                  className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10 p-2 bg-white/80 rounded-full"
+                >
+                  <i className="fas fa-times text-xl"></i>
+                </button>
+                {renderProfileEditor()}
+              </div>
             </div>
           )}
         </div>
       </div>
       {/* Delete Profile Modal */}
       {isDeleteModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 modal-open">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="p-6">
               <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
@@ -2240,7 +2897,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                       setDeletePassword(e.target.value);
                       setDeleteError('');
                     }}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition"
+                    style={{ color: '#000000' }}
                     placeholder="Введите пароль"
                   />
                   {deleteError && <p className="text-red-500 text-xs mt-1">{deleteError}</p>}

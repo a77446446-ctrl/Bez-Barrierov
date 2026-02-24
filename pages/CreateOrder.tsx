@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { SERVICE_TYPES, MOCK_USERS, MOCK_ORDERS } from '../constants';
+import { SERVICE_TYPES } from '../constants';
 import { UserRole, OrderStatus, Order, Location } from '../types';
 import { toast } from 'react-hot-toast';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import ErrorBoundary from '../components/ErrorBoundary';
 import AddressAutocomplete from '../components/AddressAutocomplete';
+import { createClient } from '@supabase/supabase-js';
 
 // Fix for default Leaflet markers
 let DefaultIcon = L.icon({
@@ -151,12 +152,14 @@ const UnifiedMapPicker = ({
             if (data && data.display_name) {
                 setter({ lat, lng, address: data.display_name });
             } else {
-                setter({ lat, lng, address: 'Адрес не найден' });
+                const fallbackAddress = `Точка на карте: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+                setter({ lat, lng, address: fallbackAddress });
             }
         })
         .catch(err => {
             console.error('Ошибка геокодирования:', err);
-            setter({ lat, lng, address: 'Ошибка' });
+            const fallbackAddress = `Точка на карте: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+            setter({ lat, lng, address: fallbackAddress });
         });
   };
 
@@ -357,13 +360,51 @@ const CreateOrder: React.FC = () => {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [price, setPrice] = useState<number>(0);
+  const [allowOpenSelection, setAllowOpenSelection] = useState(true);
   const [details, setDetails] = useState('');
-  const [allowOpenSelection, setAllowOpenSelection] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [voiceMessage, setVoiceMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [executors, setExecutors] = useState<any[]>([]);
+  const [realRatings, setRealRatings] = useState<Record<string, string>>({});
+
+  // Ref to track if we've already handled the URL preselection to avoid overriding user changes
+  const hasHandledPreselection = useRef(false);
+
+
+  useEffect(() => {
+    const fetchRealRatings = async () => {
+      const supabase = getSupabase();
+      if (!supabase) return;
+      
+      const { data } = await supabase
+        .from('orders')
+        .select('executor_id, rating')
+        .not('rating', 'is', null)
+        .gt('rating', 0);
+
+      if (data) {
+        const ratingsMap: Record<string, number[]> = {};
+        data.forEach((row: any) => {
+          if (row.executor_id) {
+            if (!ratingsMap[row.executor_id]) ratingsMap[row.executor_id] = [];
+            ratingsMap[row.executor_id].push(row.rating);
+          }
+        });
+
+        const averages: Record<string, string> = {};
+        Object.keys(ratingsMap).forEach(id => {
+          const ratings = ratingsMap[id];
+          const sum = ratings.reduce((a, b) => a + b, 0);
+          averages[id] = (sum / ratings.length).toFixed(1);
+        });
+        setRealRatings(averages);
+      }
+    };
+    
+    fetchRealRatings();
+  }, []);
   const [locationFrom, setLocationFrom] = useState<Location | undefined>(undefined);
   const [locationTo, setLocationTo] = useState<Location | undefined>(undefined);
   const [generalLocation, setGeneralLocation] = useState<Location | undefined>(undefined);
@@ -428,32 +469,93 @@ const CreateOrder: React.FC = () => {
     }
   };
 
+  const getSupabase = () => {
+    const url = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
+    const key = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined;
+    if (!url || !key) return null;
+    return createClient(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        lock: async (_name, _acquireTimeout, fn) => {
+          return await fn();
+        }
+      }
+    });
+  };
+
   useEffect(() => {
-    // Load executors
-    const storedUsers = localStorage.getItem('bez_barrierov_users');
-    const users = storedUsers ? JSON.parse(storedUsers) : MOCK_USERS;
-    const validExecutors = users.filter((u: any) => 
-      u.role === UserRole.EXECUTOR && 
-      u.id !== 'u2' && 
-      u.id !== 'u3' &&
-      // Hide subscribed executors unless they are subscribed to the current user
-      (u.subscriptionStatus !== 'active' || u.subscribedToCustomerId === user?.id)
-    );
-    
     if (!isLoading && !user) {
       navigate('/auth');
       toast('Пожалуйста, войдите в систему для оформления заказа', { icon: '🔒' });
       return;
     }
 
-    if (preselectedExecutorId) {
-      setExecutorId(preselectedExecutorId);
-      // Filter to show only the selected executor
-      const selected = validExecutors.find((u: any) => u.id === preselectedExecutorId);
-      setExecutors(selected ? [selected] : validExecutors);
-    } else {
-      setExecutors(validExecutors);
+    const profileRowToUser = (row: any) => {
+      return {
+        id: row.id ?? row.user_id ?? row.userId,
+        role: row.role,
+        name: row.name || '',
+        email: row.email || '',
+        phone: row.phone || '',
+        telegramId: row.telegram_id ?? row.telegramId,
+        avatar: row.avatar ?? row.avatar_url,
+        rating: row.rating ?? undefined,
+        reviewsCount: row.reviews_count ?? row.reviewsCount,
+        reviews: row.reviews ?? undefined,
+        location: row.location ?? undefined,
+        locationCoordinates: row.location_coordinates ?? row.locationCoordinates,
+        coverageRadius: row.coverage_radius ?? row.coverageRadius,
+        description: row.description ?? undefined,
+        profileVerificationStatus: row.profile_verification_status ?? row.profileVerificationStatus,
+        vehiclePhoto: row.vehicle_photo ?? row.vehiclePhoto,
+        customServices: row.custom_services ?? row.customServices,
+        subscriptionStatus: row.subscription_status ?? row.subscriptionStatus,
+        subscriptionStartDate: row.subscription_start_date ?? row.subscriptionStartDate,
+        subscriptionEndDate: row.subscription_end_date ?? row.subscriptionEndDate,
+        subscribedToCustomerId: row.subscribed_to_customer_id ?? row.subscribedToCustomerId,
+        subscriptionRequestToCustomerId: row.subscription_request_to_customer_id ?? row.subscriptionRequestToCustomerId,
+        subscribedExecutorId: row.subscribed_executor_id ?? row.subscribedExecutorId,
+        notifications: row.notifications ?? undefined
+      };
+    };
+
+    const supabase = getSupabase();
+    if (!supabase) {
+      setExecutors([]);
+      return;
     }
+
+    let isActive = true;
+    void (async () => {
+      const { data, error } = await supabase.from('profiles').select('*').eq('role', UserRole.EXECUTOR);
+      if (!isActive) return;
+      if (error || !Array.isArray(data)) {
+        setExecutors([]);
+        return;
+      }
+
+      const validExecutors = data
+        .map(profileRowToUser)
+        .filter((u: any) => u.role === UserRole.EXECUTOR && (u.subscriptionStatus !== 'active' || u.subscribedToCustomerId === user?.id));
+
+      if (preselectedExecutorId) {
+        if (!hasHandledPreselection.current) {
+          setExecutorId(preselectedExecutorId);
+          hasHandledPreselection.current = true;
+        }
+        const selected = validExecutors.find((u: any) => u.id === preselectedExecutorId);
+        setExecutors(selected ? [selected] : validExecutors);
+      } else {
+        hasHandledPreselection.current = true; // Mark as handled if no preselection
+        setExecutors(validExecutors);
+      }
+    })();
+
+    return () => {
+      isActive = false;
+    };
   }, [user, isLoading, preselectedExecutorId, navigate]);
 
   const startRecording = async () => {
@@ -564,7 +666,7 @@ const CreateOrder: React.FC = () => {
 
   // Logic merged into main useEffect
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
       navigate('/auth?mode=register');
@@ -590,45 +692,40 @@ const CreateOrder: React.FC = () => {
     }
 
     setIsSubmitting(true);
+    try {
+      const supabase = getSupabase();
+      if (!supabase) {
+        toast.error('Supabase не настроен');
+        return;
+      }
 
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false);
-      const executorName = executors.find(e => e.id === executorId)?.name || 'Исполнитель';
-      
-      // Create new order
-      const newOrder: Order = {
-        id: Math.random().toString(36).substr(2, 9),
-        customerId: user.id,
-        executorId: executorId || undefined,
-        serviceType: selectedServiceType?.name || 'Услуга',
-        date: date,
-        time: time,
+      const payload = {
+        customer_id: user.id,
+        executor_id: executorId || null,
+        service_type: selectedServiceType?.name || 'Услуга',
+        date,
+        time,
         status: executorId ? OrderStatus.PENDING : OrderStatus.OPEN,
-        totalPrice: price,
-        details: details,
-        allowOpenSelection: !!executorId && allowOpenSelection,
+        total_price: price,
+        details: details || null,
+        allow_open_selection: executorId ? allowOpenSelection : true, // Force true for open orders
         responses: [],
-        voiceMessageUrl: voiceMessage || undefined,
-        locationFrom: serviceId === '3' ? locationFrom : undefined,
-        locationTo: serviceId === '3' ? locationTo : undefined,
-        generalLocation: serviceId !== '3' ? generalLocation : undefined
+        voice_message_url: voiceMessage || null,
+        location_from: serviceId === '3' ? locationFrom : null,
+        location_to: serviceId === '3' ? locationTo : null,
+        general_location: serviceId !== '3' ? generalLocation : null
       };
 
-      // Get existing orders from LS or initialize with mocks
-      const storedOrders = localStorage.getItem('bez_barrierov_orders');
-      const currentOrders: Order[] = storedOrders ? JSON.parse(storedOrders) : MOCK_ORDERS;
-      
-      // Add new order
-      const updatedOrders = [newOrder, ...currentOrders];
-      
-      // Save to LS
-      localStorage.setItem('bez_barrierov_orders', JSON.stringify(updatedOrders));
-      window.dispatchEvent(new Event('storage'));
-      
-      toast.success(`Заказ создан успешно!`);
+      const { error } = await supabase.from('orders').insert(payload);
+      if (error) throw error;
+
+      toast.success('Заказ создан успешно!');
       navigate('/dashboard?tab=orders');
-    }, 1000);
+    } catch (err: any) {
+      toast.error(err?.message || 'Не удалось создать заказ');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const calculateTotal = () => {
@@ -738,28 +835,11 @@ const CreateOrder: React.FC = () => {
               <option value="">-- Любой свободный специалист --</option>
               {executors.map((ex) => (
                 <option key={ex.id} value={ex.id}>
-                  {ex.name} ({ex.rating} ★)
+                  {ex.name} ({realRatings[ex.id] || ex.rating || '0.0'} ★)
                 </option>
               ))}
             </select>
           </div>
-
-          {/* Option to allow others to respond if rejected */}
-          {executorId && (
-            <div className="bg-white/5 p-4 rounded-2xl border border-white/10 flex items-start gap-3">
-              <input
-                type="checkbox"
-                id="allowOpenSelection"
-                checked={allowOpenSelection}
-                onChange={(e) => setAllowOpenSelection(e.target.checked)}
-                className="mt-1 w-5 h-5 text-careem-primary rounded focus:ring-careem-primary/60 border-white/20 bg-[#0B1220]/60"
-              />
-              <label htmlFor="allowOpenSelection" className="text-sm text-slate-300 cursor-pointer select-none">
-                <span className="font-semibold text-slate-100 block mb-1">Если {selectedExecutor?.name} откажется:</span>
-                Разрешить другим помощникам откликаться на этот заказ (вы сможете выбрать исполнителя из списка откликнувшихся)
-              </label>
-            </div>
-          )}
 
           {/* Location Selection */}
           <div className="bg-white/5 p-4 sm:p-6 rounded-3xl border border-white/10 relative">
@@ -790,24 +870,34 @@ const CreateOrder: React.FC = () => {
               <label className="block text-sm font-semibold text-slate-200 mb-2">
                 Дата <span className="text-red-500">*</span>
               </label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="shadow-sm focus:ring-2 focus:ring-careem-primary/60 focus:border-careem-primary block w-full sm:text-sm border border-white/10 rounded-xl py-3 pl-4 pr-12 bg-[#0B1220]/60 text-slate-100"
-                min={new Date().toISOString().split('T')[0]}
-              />
+              <div className="relative">
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="shadow-sm focus:ring-2 focus:ring-careem-primary/60 focus:border-careem-primary block w-full sm:text-sm border border-white/10 rounded-xl py-3 pl-4 pr-12 bg-[#0B1220]/60 text-slate-100 [color-scheme:dark]"
+                  min={new Date().toISOString().split('T')[0]}
+                />
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <i className="fas fa-calendar-alt text-green-500 text-xl"></i>
+                </div>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-200 mb-2">
                 Время <span className="text-red-500">*</span>
               </label>
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="shadow-sm focus:ring-2 focus:ring-careem-primary/60 focus:border-careem-primary block w-full sm:text-sm border border-white/10 rounded-xl py-3 pl-4 pr-12 bg-[#0B1220]/60 text-slate-100"
-              />
+              <div className="relative">
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="shadow-sm focus:ring-2 focus:ring-careem-primary/60 focus:border-careem-primary block w-full sm:text-sm border border-white/10 rounded-xl py-3 pl-4 pr-12 bg-[#0B1220]/60 text-slate-100 [color-scheme:dark]"
+                />
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <i className="fas fa-clock text-orange-500 text-xl"></i>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -915,13 +1005,29 @@ const CreateOrder: React.FC = () => {
              )}
           </div>
 
-          {/* Total Price Estimate (Legacy display removed) */}
-          {/* {selectedServiceType && (
-            <div className="bg-gray-50 p-4 rounded-md flex justify-between items-center">
-              <span className="text-gray-700 font-medium">Итоговая стоимость (примерно):</span>
-              <span className="text-xl font-bold text-careem-primary">{price} ₽</span>
+          {/* Allow Open Selection Checkbox */}
+          {executorId && (
+            <div className="bg-white/5 p-4 rounded-2xl border border-white/10 flex items-start gap-3">
+               <div className="flex h-6 items-center">
+                 <input
+                   id="allow-open-selection"
+                   name="allow-open-selection"
+                   type="checkbox"
+                   checked={allowOpenSelection}
+                   onChange={(e) => setAllowOpenSelection(e.target.checked)}
+                   className="h-5 w-5 rounded border-white/10 bg-[#0B1220]/60 text-careem-primary focus:ring-careem-primary/60 focus:ring-offset-0"
+                 />
+               </div>
+               <div className="text-sm">
+                 <label htmlFor="allow-open-selection" className="font-medium text-slate-200 block cursor-pointer">
+                   Если выбранный помощник откажется, отправить заказ всем
+                 </label>
+                 <p className="text-slate-400 mt-1">
+                   При отказе конкретного исполнителя заказ автоматически станет доступен всем свободным помощникам в ленте.
+                 </p>
+               </div>
             </div>
-          )} */}
+          )}
 
           {/* Submit Button */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-white/10">

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { UserRole, Order, OrderStatus } from '../types';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { createClient } from '@supabase/supabase-js';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -19,24 +20,33 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   useEffect(() => {
     if (user?.role === UserRole.EXECUTOR) {
-      const checkOrders = () => {
-        const stored = localStorage.getItem('bez_barrierov_orders');
-        if (stored) {
-          const orders: Order[] = JSON.parse(stored);
-          const count = orders.filter(o => 
-            o.status === OrderStatus.OPEN || 
-            (o.executorId === user.id && 
-             o.status !== OrderStatus.COMPLETED && 
-             o.status !== OrderStatus.CANCELLED && 
-             o.status !== OrderStatus.REJECTED)
-          ).length;
-          setOpenOrdersCount(count);
-        }
+      const getSupabase = () => {
+        const url = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
+        const key = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined;
+        if (!url || !key) return null;
+        return createClient(url, key, {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true
+          }
+        });
       };
 
-      checkOrders();
-      // Poll every 5 seconds to update count
-      const interval = setInterval(checkOrders, 5000);
+      const checkOrders = async () => {
+        const supabase = getSupabase();
+        if (!supabase) return;
+        const { count: openCount } = await supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', OrderStatus.OPEN);
+        const { count: mineCount } = await supabase
+          .from('orders')
+          .select('*', { count: 'exact', head: true })
+          .eq('executor_id', user.id)
+          .eq('status', OrderStatus.PENDING);
+        setOpenOrdersCount((openCount || 0) + (mineCount || 0));
+      };
+
+      void checkOrders();
+      const interval = setInterval(() => void checkOrders(), 5000);
       return () => clearInterval(interval);
     }
   }, [user]);
@@ -58,10 +68,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navItems: Array<{ to: string; label: string; icon: string; isActive: boolean }> = [
     homeItem,
     {
-      to: user ? '/dashboard?tab=profile' : '/auth',
-      label: 'Настройки',
-      icon: 'fa-gear',
-      isActive: user ? currentPath === '/dashboard' && currentTab === 'profile' : currentPath === '/auth'
+      to: user ? '/dashboard?tab=orders' : '/auth',
+      label: 'Личный кабинет',
+      icon: 'fa-user-circle',
+      isActive: user ? currentPath === '/dashboard' && (currentTab === 'orders' || !currentTab) : currentPath === '/auth'
     },
   ];
 

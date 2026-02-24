@@ -1,14 +1,93 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MOCK_USERS } from '../constants';
 import { useAuth } from '../context/AuthContext';
-import { User, UserRole } from '../types';
+import { User, UserRole, OrderStatus } from '../types';
+import { createClient } from '@supabase/supabase-js';
 
 const Executors: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [executors, setExecutors] = useState<User[]>([]);
+  const [blockedExecutorIds, setBlockedExecutorIds] = useState<string[]>([]);
+  const [realRatings, setRealRatings] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingProfileId, setLoadingProfileId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchRealRatings = async () => {
+      const supabase = getSupabase();
+      if (!supabase) return;
+      
+      const { data } = await supabase
+        .from('orders')
+        .select('executor_id, rating')
+        .not('rating', 'is', null)
+        .gt('rating', 0);
+
+      if (data) {
+        const ratingsMap: Record<string, number[]> = {};
+        data.forEach((row: any) => {
+          if (row.executor_id) {
+            if (!ratingsMap[row.executor_id]) ratingsMap[row.executor_id] = [];
+            ratingsMap[row.executor_id].push(row.rating);
+          }
+        });
+
+        const averages: Record<string, string> = {};
+        Object.keys(ratingsMap).forEach(id => {
+          const ratings = ratingsMap[id];
+          const sum = ratings.reduce((a, b) => a + b, 0);
+          averages[id] = (sum / ratings.length).toFixed(1);
+        });
+        setRealRatings(averages);
+      }
+    };
+    
+    fetchRealRatings();
+  }, []);
+
+  const getSupabase = () => {
+    const url = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
+    const key = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined;
+    if (!url || !key) return null;
+    return createClient(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    });
+  };
+
+  const profileRowToUser = (row: any): User => {
+    return {
+      id: row.id ?? row.user_id ?? row.userId,
+      role: row.role,
+      name: row.name || '',
+      email: row.email || '',
+      phone: row.phone || '',
+      telegramId: row.telegram_id ?? row.telegramId,
+      avatar: row.avatar ?? row.avatar_url,
+      rating: row.rating ?? undefined,
+      reviewsCount: row.reviews_count ?? row.reviewsCount,
+      reviews: row.reviews ?? undefined,
+      location: row.location ?? undefined,
+      locationCoordinates: row.location_coordinates ?? row.locationCoordinates,
+      coverageRadius: row.coverage_radius ?? row.coverageRadius,
+      description: row.description ?? undefined,
+      profileVerificationStatus: row.profile_verification_status ?? row.profileVerificationStatus,
+      vehiclePhoto: row.vehicle_photo ?? row.vehiclePhoto,
+      customServices: row.custom_services ?? row.customServices,
+      subscriptionStatus: row.subscription_status ?? row.subscriptionStatus,
+      subscriptionStartDate: row.subscription_start_date ?? row.subscriptionStartDate,
+      subscriptionEndDate: row.subscription_end_date ?? row.subscriptionEndDate,
+      subscribedToCustomerId: row.subscribed_to_customer_id ?? row.subscribedToCustomerId,
+      subscriptionRequestToCustomerId: row.subscription_request_to_customer_id ?? row.subscriptionRequestToCustomerId,
+      subscribedExecutorId: row.subscribed_executor_id ?? row.subscribedExecutorId,
+      notifications: row.notifications ?? undefined
+    };
+  };
 
   useEffect(() => {
     if (!user) {
@@ -19,12 +98,84 @@ const Executors: React.FC = () => {
       navigate('/dashboard');
       return;
     }
+    
+    setIsLoading(true);
+    
+    let isActive = true;
+    const timeoutId = setTimeout(() => {
+      if (isActive) {
+        setIsLoading(false);
+        console.warn('Executors loading timed out');
+      }
+    }, 15000);
 
-    const storedUsers = localStorage.getItem('bez_barrierov_users');
-    let users: User[] = storedUsers ? JSON.parse(storedUsers) : MOCK_USERS;
-    users = users.filter((u) => u.id !== 'u2' && u.id !== 'u3');
-    setExecutors(users.filter((u) => u.role === UserRole.EXECUTOR && u.subscriptionStatus !== 'active'));
-  }, [navigate, user]);
+    const supabase = getSupabase();
+    if (!supabase) {
+      setIsLoading(false);
+      clearTimeout(timeoutId);
+      return;
+    }
+
+    void (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('role', UserRole.EXECUTOR)
+          .neq('subscription_status', 'active');
+        
+        if (!isActive) return;
+
+        // Fetch busy executors (those with active CONFIRMED orders)
+        const { data: busyOrders } = await supabase
+          .from('orders')
+          .select('executor_id')
+          .eq('status', OrderStatus.CONFIRMED);
+          
+        const busyExecutorIds = new Set(busyOrders?.map((o: any) => o.executor_id).filter(Boolean) || []);
+        
+        if (error || !Array.isArray(data)) {
+          setExecutors([]);
+        } else {
+          setExecutors(data.map(profileRowToUser).filter(u => !busyExecutorIds.has(u.id)));
+        }
+
+        if (!user) {
+          setBlockedExecutorIds([]);
+          setIsLoading(false);
+          clearTimeout(timeoutId);
+          return;
+        }
+
+        const { data: ordersData } = await supabase
+          .from('orders')
+          .select('executor_id, status')
+          .eq('customer_id', user.id);
+
+        if (!isActive) return;
+
+        if (!Array.isArray(ordersData)) {
+          setBlockedExecutorIds([]);
+        } else {
+          // We no longer block executors who have confirmed orders.
+          // All executors should be visible unless they are blocked for other reasons (not implemented yet).
+          setBlockedExecutorIds([]);
+        }
+      } catch (e) {
+        console.error('Error loading executors:', e);
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
+        }
+        clearTimeout(timeoutId);
+      }
+    })();
+
+    return () => {
+      isActive = false;
+      clearTimeout(timeoutId);
+    };
+  }, [navigate, user?.id, user?.role]);
 
   const filteredExecutors = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -91,8 +242,15 @@ const Executors: React.FC = () => {
         </div>
       </div>
 
-      {filteredExecutors.length === 0 ? (
-        <div className="rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl p-8 text-center">
+      {isLoading ? (
+        <div className="rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl p-8 text-center animate-in fade-in duration-300">
+          <div className="flex justify-center mb-4">
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-careem-primary border-t-transparent"></div>
+          </div>
+          <h2 className="text-lg font-bold text-slate-100">Подождите, идет подбор специалистов...</h2>
+        </div>
+      ) : filteredExecutors.length === 0 ? (
+        <div className="rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl p-8 text-center animate-in fade-in duration-300">
           <h2 className="text-lg font-bold text-slate-100">Помощники не найдены</h2>
           <p className="text-sm text-slate-400 mt-2">Попробуйте изменить запрос поиска.</p>
         </div>
@@ -128,7 +286,7 @@ const Executors: React.FC = () => {
                       <div className="shrink-0 text-right">
                         <div className="inline-flex items-center gap-1 text-xs font-bold text-slate-200">
                           <i className="fas fa-star text-yellow-400"></i>
-                          <span>{executor.rating ?? '—'}</span>
+                          <span>{realRatings[executor.id] || '0.0'}</span>
                         </div>
                         <div className="text-[10px] text-slate-500 mt-1">
                           {typeof executor.reviewsCount === 'number' ? `${executor.reviewsCount} отзывов` : ''}
@@ -144,16 +302,32 @@ const Executors: React.FC = () => {
 
                 <div className="mt-5 flex gap-2">
                   <button
-                    onClick={() => navigate(`/users/${executor.id}`)}
-                    className="flex-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition text-slate-100 text-sm font-semibold py-2.5"
+                    onClick={() => {
+                      setLoadingProfileId(executor.id);
+                      setTimeout(() => navigate(`/users/${executor.id}`, { state: { name: executor.name } }), 50);
+                    }}
+                    disabled={loadingProfileId === executor.id}
+                    className="flex-1 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition text-slate-100 text-sm font-semibold py-2.5 flex items-center justify-center gap-2"
                   >
-                    Профиль
+                    {loadingProfileId === executor.id ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-slate-400">Подождите, идет загрузка...</span>
+                      </>
+                    ) : (
+                      'Профиль'
+                    )}
                   </button>
                   <button
-                    onClick={() => navigate(`/orders/create?executorId=${executor.id}`)}
-                    className="flex-1 rounded-2xl bg-careem-primary hover:bg-[#255EE6] transition text-white text-sm font-semibold py-2.5 shadow-lg shadow-[#2D6BFF]/20"
+                    onClick={() => {
+                      if (!blockedExecutorIds.includes(executor.id)) {
+                        navigate(`/orders/create?executorId=${executor.id}`);
+                      }
+                    }}
+                    disabled={blockedExecutorIds.includes(executor.id)}
+                    className="flex-1 rounded-2xl bg-careem-primary hover:bg-[#255EE6] transition text-white text-sm font-semibold py-2.5 shadow-lg shadow-[#2D6BFF]/20 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-careem-primary"
                   >
-                    Заказать
+                    {blockedExecutorIds.includes(executor.id) ? 'Вы оставили помощнику заявку' : 'Заказать'}
                   </button>
                 </div>
               </div>

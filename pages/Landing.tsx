@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, ServiceType, Order, OrderStatus } from '../types';
-import { SERVICE_TYPES, MOCK_USERS, MOCK_ORDERS } from '../constants';
+import { SERVICE_TYPES } from '../constants';
 import { getSmartRecommendations } from '../services/geminiService';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import OrderMap from '../components/OrderMap';
+import { createClient } from '@supabase/supabase-js';
 
 interface LandingProps {
   onViewProfile: (executor: User) => void;
@@ -23,6 +24,63 @@ const Landing: React.FC<LandingProps> = ({ onViewProfile, onBook }) => {
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
   const [sortType, setSortType] = useState<'rating' | 'price'>('rating');
   
+  const getSupabase = () => {
+    const url = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
+    const key = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined;
+    if (!url || !key) return null;
+    return createClient(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        lock: async (_name, _acquireTimeout, fn) => {
+          return await fn();
+        }
+      }
+    });
+  };
+
+  const orderRowToOrder = (row: any): Order => {
+    return {
+      id: row.id,
+      customerId: row.customer_id,
+      executorId: row.executor_id ?? undefined,
+      serviceType: row.service_type,
+      date: row.date,
+      time: row.time,
+      status: row.status,
+      totalPrice: row.total_price,
+      details: row.details ?? undefined,
+      rejectionReason: row.rejection_reason ?? undefined,
+      allowOpenSelection: row.allow_open_selection ?? undefined,
+      responses: Array.isArray(row.responses) ? row.responses.map((x: any) => String(x)) : [],
+      voiceMessageUrl: row.voice_message_url ?? undefined,
+      rating: row.rating ?? undefined,
+      review: row.review ?? undefined,
+      locationFrom: row.location_from ?? undefined,
+      locationTo: row.location_to ?? undefined,
+      generalLocation: row.general_location ?? undefined
+    };
+  };
+
+  const profileRowToUser = (row: any): User => {
+    return {
+      id: row.id ?? row.user_id ?? row.userId,
+      role: row.role,
+      name: row.name || '',
+      email: row.email || '',
+      phone: row.phone || '',
+      avatar: row.avatar ?? row.avatar_url,
+      description: row.description ?? undefined,
+      location: row.location ?? undefined,
+      rating: row.rating ?? undefined,
+      reviewsCount: row.reviews_count ?? row.reviewsCount,
+      customServices: row.custom_services ?? row.customServices,
+      subscriptionStatus: row.subscription_status ?? row.subscriptionStatus,
+      subscribedToCustomerId: row.subscribed_to_customer_id ?? row.subscribedToCustomerId
+    };
+  };
+
   const formatAddress = (address?: string) => {
     if (!address) return 'Адрес не указан';
     // Remove country and postal code for cleaner display
@@ -34,29 +92,34 @@ const Landing: React.FC<LandingProps> = ({ onViewProfile, onBook }) => {
   };
 
   useEffect(() => {
-    const loadData = () => {
-      // Load Users
-      const storedUsers = localStorage.getItem('bez_barrierov_users');
-      let users: User[] = storedUsers ? JSON.parse(storedUsers) : MOCK_USERS;
-      
-      // Filter out legacy mock users (Alexey Petrov and Maria Sidorova)
-      users = users.filter(u => u.id !== 'u2' && u.id !== 'u3');
-      
-      const executorUsers = users.filter(u => u.role === UserRole.EXECUTOR).reverse();
-      setExecutors(executorUsers);
+    let isActive = true;
+    const supabase = getSupabase();
 
-      // Load Orders for Executors
+    const loadData = async () => {
+      if (supabase) {
+        const { data, error } = await supabase.from('profiles').select('*').eq('role', UserRole.EXECUTOR);
+        if (isActive && !error && Array.isArray(data)) {
+          setExecutors(data.map(profileRowToUser).reverse());
+        }
+      } else if (isActive) {
+        setExecutors([]);
+      }
+
       if (user?.role === UserRole.EXECUTOR) {
-        const storedOrders = localStorage.getItem('bez_barrierov_orders');
-        const orders: Order[] = storedOrders ? JSON.parse(storedOrders) : MOCK_ORDERS;
-        // Show OPEN orders
-        setAvailableOrders(orders.filter(o => o.status === OrderStatus.OPEN));
+        if (supabase) {
+          const { data } = await supabase.from('orders').select('*').eq('status', OrderStatus.OPEN).order('created_at', { ascending: false });
+          const orders = Array.isArray(data) ? data.map(orderRowToOrder) : [];
+          setAvailableOrders(orders);
+        } else {
+          setAvailableOrders([]);
+        }
       }
     };
-    
-    loadData();
-    window.addEventListener('storage', loadData);
-    return () => window.removeEventListener('storage', loadData);
+
+    void loadData();
+    return () => {
+      isActive = false;
+    };
   }, [user]);
   
   const handleSmartSearch = async () => {
@@ -67,23 +130,10 @@ const Landing: React.FC<LandingProps> = ({ onViewProfile, onBook }) => {
     setIsAiLoading(false);
   };
 
-  const handleTakeOrder = (orderId: string) => {
-    const storedOrders = localStorage.getItem('bez_barrierov_orders');
-    const orders: Order[] = storedOrders ? JSON.parse(storedOrders) : MOCK_ORDERS;
-    
-    const updatedOrders = orders.map(o => {
-      if (o.id === orderId) {
-        return { 
-          ...o, 
-          status: OrderStatus.CONFIRMED, 
-          executorId: user!.id 
-        };
-      }
-      return o;
-    });
-    
-    localStorage.setItem('bez_barrierov_orders', JSON.stringify(updatedOrders));
-    setAvailableOrders(updatedOrders.filter(o => o.status === OrderStatus.OPEN));
+  const handleTakeOrder = async (orderId: string) => {
+    const supabase = getSupabase();
+    if (!supabase || !user) return;
+    await supabase.from('orders').update({ status: OrderStatus.CONFIRMED, executor_id: user.id, responses: [] }).eq('id', orderId);
     navigate('/dashboard');
   };
 
@@ -130,7 +180,34 @@ const Landing: React.FC<LandingProps> = ({ onViewProfile, onBook }) => {
   });
 
   return (
-    <div className="animate-in fade-in duration-500">
+    <div className="animate-in fade-in duration-500 relative">
+      {!user && (
+        <header className="sticky top-0 z-50 border-b border-white/5 bg-[#0B1220]/85 backdrop-blur-xl">
+          <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[#2D6BFF] to-[#1A3FA8] flex items-center justify-center shadow-lg shadow-[#2D6BFF]/20">
+                <i className="fas fa-square text-white text-xs"></i>
+              </div>
+              <div className="font-semibold tracking-tight text-slate-100">БезБарьеров</div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/auth?mode=login')}
+                className="text-sm font-semibold text-slate-300 hover:text-white transition px-3 py-2"
+              >
+                Войти
+              </button>
+              <button
+                onClick={() => navigate('/auth?mode=register&role=CUSTOMER')}
+                className="rounded-lg bg-careem-primary hover:bg-[#255EE6] transition text-white text-sm font-semibold py-2 px-4 shadow-lg shadow-[#2D6BFF]/20"
+              >
+                Регистрация
+              </button>
+            </div>
+          </div>
+        </header>
+      )}
+
       <section className="px-4 pt-10 pb-6">
         <div className="max-w-5xl mx-auto text-center">
           <h1 className="text-4xl md:text-6xl font-black tracking-tight leading-[1.05] text-slate-100 drop-shadow-[0_20px_60px_rgba(0,0,0,0.55)]">

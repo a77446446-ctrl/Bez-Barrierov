@@ -17,8 +17,19 @@ import { Toaster, toast } from 'react-hot-toast';
 import ErrorBoundary from './components/ErrorBoundary';
 
 const App: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const navigate = useNavigate();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#050913] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#2D6BFF] border-t-transparent"></div>
+          <div className="text-slate-400 font-medium animate-pulse">Загрузка...</div>
+        </div>
+      </div>
+    );
+  }
 
   const handleBook = (executor: User) => {
     if (!user) {

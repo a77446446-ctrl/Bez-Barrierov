@@ -9,16 +9,21 @@ interface AuthProps {
 }
 
 const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
-  const { login, register, loginWithGoogle, loginWithTelegram } = useAuth();
+  const { login, register, resetPassword, updatePassword, loginWithGoogle, loginWithTelegram } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [isLogin, setIsLogin] = useState(() => {
     return searchParams.get('mode') !== 'register';
   });
+  const [isReset, setIsReset] = useState(() => searchParams.get('mode') === 'reset');
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState('');
+  const [isResetPasswordVisible, setIsResetPasswordVisible] = useState(false);
   const [role, setRole] = useState<UserRole>(UserRole.CUSTOMER);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -26,11 +31,16 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
   useEffect(() => {
     const mode = searchParams.get('mode');
     const roleParam = searchParams.get('role');
+    const deleted = searchParams.get('deleted');
+    const recoveryInHash = typeof window !== 'undefined' && /type=recovery/i.test(window.location.hash);
 
-    if (mode === 'register') {
-      setIsLogin(false);
-    } else if (mode === 'login') {
+    if (mode === 'reset' || recoveryInHash) {
+      setIsReset(true);
       setIsLogin(true);
+    } else {
+      setIsReset(false);
+      if (mode === 'register') setIsLogin(false);
+      else if (mode === 'login') setIsLogin(true);
     }
 
     if (roleParam === 'EXECUTOR') {
@@ -38,10 +48,18 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
     } else if (roleParam === 'CUSTOMER') {
       setRole(UserRole.CUSTOMER);
     }
+
+    if (deleted === '1') {
+      setIsLogin(false);
+      setTimeout(() => {
+        toast.success('Аккаунт удалён. Зарегистрируйтесь заново.');
+      }, 0);
+    }
   }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReset) return;
     if (!isLogin && !termsAccepted) {
       toast.error('Необходимо принять условия публичной оферты');
       return;
@@ -61,14 +79,68 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
         await register(name, email, password, role);
         toast.success('Регистрация успешна!');
       }
-      if (onSuccess) {
-        onSuccess();
-      } else {
-        // Redirect to dashboard immediately if no custom handler is provided
-        window.location.href = '/dashboard';
-      }
+      if (onSuccess) onSuccess();
+      else navigate('/dashboard');
     } catch (error: any) {
-      toast.error(error.message || 'Произошла ошибка');
+      const msg = error?.message || 'Произошла ошибка';
+      if (isLogin && /invalid login credentials/i.test(msg)) {
+        toast.error('Неверный email или пароль');
+        return;
+      }
+      if (isLogin && /подтвердите email/i.test(msg)) {
+        toast.error(msg);
+        return;
+      }
+      if (isLogin && /профиль не создан/i.test(msg)) {
+        setIsLogin(false);
+        toast(msg);
+        return;
+      }
+      toast.error(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSetNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isReset) return;
+    if (!resetPasswordValue || resetPasswordValue.length < 6) {
+      toast.error('Пароль должен быть не короче 6 символов');
+      return;
+    }
+    if (resetPasswordValue !== resetPasswordConfirm) {
+      toast.error('Пароли не совпадают');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await updatePassword(resetPasswordValue);
+      toast.success('Пароль обновлён. Войдите с новым паролем.');
+      setResetPasswordValue('');
+      setResetPasswordConfirm('');
+      setIsReset(false);
+      setIsLogin(true);
+      navigate('/auth?mode=login', { replace: true });
+    } catch (error: any) {
+      toast.error(error?.message || 'Не удалось обновить пароль');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    const targetEmail = email.trim();
+    if (!targetEmail) {
+      toast.error('Введите email для восстановления пароля');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await resetPassword(targetEmail);
+      toast.success('Письмо для восстановления пароля отправлено');
+    } catch (error: any) {
+      toast.error(error?.message || 'Не удалось отправить письмо');
     } finally {
       setIsLoading(false);
     }
@@ -82,7 +154,7 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
       if (onSuccess) {
         onSuccess();
       } else {
-        window.location.href = '/dashboard';
+        navigate('/dashboard');
       }
     } catch (error) {
       toast.error('Ошибка входа через Google');
@@ -99,7 +171,7 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
       if (onSuccess) {
         onSuccess();
       } else {
-        window.location.href = '/dashboard';
+        navigate('/dashboard');
       }
     } catch (error) {
       toast.error('Ошибка входа через Telegram');
@@ -127,13 +199,14 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
             <i className="fas fa-shield-halved text-white text-xl"></i>
           </div>
           <h2 className="mt-6 text-3xl font-extrabold tracking-tight text-slate-100">
-            {isLogin ? 'С возвращением' : 'Новый аккаунт'}
+            {isReset ? 'Новый пароль' : (isLogin ? 'С возвращением' : 'Новый аккаунт')}
           </h2>
           <p className="mt-2 text-sm text-slate-400">Добро пожаловать в БезБарьеров</p>
         </div>
 
         <div className="px-10 pb-10">
-          <div className="rounded-2xl bg-[#0B1220]/50 border border-white/5 p-1 flex gap-1">
+          {!isReset && (
+            <div className="rounded-2xl bg-[#0B1220]/50 border border-white/5 p-1 flex gap-1">
             <button
               type="button"
               onClick={() => setIsLogin(true)}
@@ -154,10 +227,11 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
             >
               Новый аккаунт
             </button>
-          </div>
+            </div>
+          )}
 
-          <form className="mt-7 space-y-5" onSubmit={handleSubmit}>
-            {!isLogin && (
+          <form className="mt-7 space-y-5" onSubmit={isReset ? handleSetNewPassword : handleSubmit}>
+            {!isLogin && !isReset && (
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -169,7 +243,7 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
                       : 'bg-[#0B1220]/40 text-slate-400 border-white/10 hover:bg-white/5 hover:text-slate-200'
                   ].join(' ')}
                 >
-                  Я заказчик
+                  <i className="fas fa-wheelchair mr-2"></i> Я заказчик
                 </button>
                 <button
                   type="button"
@@ -181,12 +255,12 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
                       : 'bg-[#0B1220]/40 text-slate-400 border-white/10 hover:bg-white/5 hover:text-slate-200'
                   ].join(' ')}
                 >
-                  Я помощник
+                  <i className="fas fa-handshake-angle mr-2"></i> Я помощник
                 </button>
               </div>
             )}
 
-            {!isLogin && (
+            {!isLogin && !isReset && (
               <div>
                 <label className="block text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-2">Имя</label>
                 <input
@@ -200,31 +274,82 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
               </div>
             )}
 
-            <div>
-              <label className="block text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-2">Электронная почта</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-xl bg-[#0B1220]/60 border border-white/10 py-3 px-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-careem-primary/60"
-                placeholder="name@example.com"
-              />
-            </div>
+            {!isReset && (
+              <div>
+                <label className="block text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-2">Электронная почта</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded-xl bg-[#0B1220]/60 border border-white/10 py-3 px-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-careem-primary/60"
+                  placeholder="name@example.com"
+                />
+              </div>
+            )}
 
-            <div>
-              <label className="block text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-2">Пароль</label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl bg-[#0B1220]/60 border border-white/10 py-3 px-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-careem-primary/60"
-                placeholder="••••••••"
-              />
-            </div>
+            {!isReset ? (
+              <div>
+                <label className="block text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-2">Пароль</label>
+                <div className="relative">
+                  <input
+                    type={isPasswordVisible ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-xl bg-[#0B1220]/60 border border-white/10 py-3 pl-4 pr-11 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-careem-primary/60"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsPasswordVisible((v) => !v)}
+                    className="absolute inset-y-0 right-0 px-3 flex items-center justify-center text-slate-400 hover:text-slate-100 transition"
+                    aria-label={isPasswordVisible ? 'Скрыть пароль' : 'Показать пароль'}
+                    title={isPasswordVisible ? 'Скрыть пароль' : 'Показать пароль'}
+                  >
+                    <i className={`fas ${isPasswordVisible ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-2">Новый пароль</label>
+                  <div className="relative">
+                    <input
+                      type={isResetPasswordVisible ? 'text' : 'password'}
+                      required
+                      value={resetPasswordValue}
+                      onChange={(e) => setResetPasswordValue(e.target.value)}
+                      className="w-full rounded-xl bg-[#0B1220]/60 border border-white/10 py-3 pl-4 pr-11 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-careem-primary/60"
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsResetPasswordVisible((v) => !v)}
+                      className="absolute inset-y-0 right-0 px-3 flex items-center justify-center text-slate-400 hover:text-slate-100 transition"
+                      aria-label={isResetPasswordVisible ? 'Скрыть пароль' : 'Показать пароль'}
+                      title={isResetPasswordVisible ? 'Скрыть пароль' : 'Показать пароль'}
+                    >
+                      <i className={`fas ${isResetPasswordVisible ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold tracking-widest text-slate-500 uppercase mb-2">Повторите пароль</label>
+                  <input
+                    type={isResetPasswordVisible ? 'text' : 'password'}
+                    required
+                    value={resetPasswordConfirm}
+                    onChange={(e) => setResetPasswordConfirm(e.target.value)}
+                    className="w-full rounded-xl bg-[#0B1220]/60 border border-white/10 py-3 px-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-careem-primary/60"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </>
+            )}
 
-            {!isLogin && (
+            {!isLogin && !isReset && (
               <div className="flex items-start gap-3">
                 <input
                   id="terms"
@@ -243,13 +368,34 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
 
             <button
               disabled={isLoading}
-              className="w-full rounded-xl bg-careem-primary hover:bg-[#255EE6] disabled:opacity-60 disabled:hover:bg-careem-primary transition text-white font-semibold py-3.5 shadow-lg shadow-[#2D6BFF]/20"
+              className="w-full rounded-xl bg-careem-primary hover:bg-[#255EE6] disabled:opacity-60 disabled:hover:bg-careem-primary transition text-white font-semibold py-3.5 shadow-lg shadow-[#2D6BFF]/20 flex items-center justify-center gap-2"
             >
-              {isLogin ? 'Войти в панель' : 'Создать аккаунт'}
+              {isLoading ? (
+                <>
+                  <i className="fas fa-circle-notch fa-spin"></i>
+                  <span>Загрузка...</span>
+                </>
+              ) : (
+                isReset ? 'Сохранить пароль' : (isLogin ? 'Войти в панель' : 'Создать аккаунт')
+              )}
             </button>
           </form>
 
-          <div className="mt-8">
+          {isLogin && !isReset && (
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={handleResetPassword}
+                disabled={isLoading}
+                className="text-xs text-slate-400 hover:text-slate-100 transition disabled:opacity-60"
+              >
+                Забыли пароль?
+              </button>
+            </div>
+          )}
+
+          {!isReset && (
+            <div className="mt-8">
             <div className="flex items-center gap-3">
               <div className="h-px flex-1 bg-white/10"></div>
               <div className="text-[10px] font-bold tracking-widest text-slate-500 uppercase">или продолжить с</div>
@@ -276,7 +422,8 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
                 <i className="fab fa-google text-red-400 text-lg"></i>
               </button>
             </div>
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

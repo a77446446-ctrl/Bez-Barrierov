@@ -91,6 +91,11 @@
         transform: scale(1.32);
         cursor: pointer;
       }
+      
+      /* Hide header when any modal is open */
+      body:has(.modal-open) header {
+        display: none !important;
+      }
     </style>
 </head>
   <body class="bg-careem-dark text-slate-100">
