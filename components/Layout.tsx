@@ -17,6 +17,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const currentTab = new URLSearchParams(location.search).get('tab');
 
   const [openOrdersCount, setOpenOrdersCount] = useState(0);
+  const [isGlobalModalOpen, setIsGlobalModalOpen] = useState(false);
+
+  useEffect(() => {
+    const onOpen = () => setIsGlobalModalOpen(true);
+    const onClose = () => setIsGlobalModalOpen(false);
+    window.addEventListener('global-modal-open', onOpen as any);
+    window.addEventListener('global-modal-close', onClose as any);
+    return () => {
+      window.removeEventListener('global-modal-open', onOpen as any);
+      window.removeEventListener('global-modal-close', onClose as any);
+    };
+  }, []);
 
   useEffect(() => {
     if (user?.role === UserRole.EXECUTOR) {
@@ -33,27 +45,62 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         });
       };
 
-      const checkOrders = async () => {
+      const checkOrders = async (signal?: AbortSignal) => {
         const supabase = getSupabase();
         if (!supabase) return;
-        const { count: openCount } = await supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', OrderStatus.OPEN);
-        const { count: mineCount } = await supabase
-          .from('orders')
-          .select('*', { count: 'exact', head: true })
-          .eq('executor_id', user.id)
-          .eq('status', OrderStatus.PENDING);
-        setOpenOrdersCount((openCount || 0) + (mineCount || 0));
+        try {
+          const { count: openCount, error: openError } = await supabase
+            .from('orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', OrderStatus.OPEN)
+            .abortSignal(signal || new AbortController().signal);
+
+          if (openError) throw openError;
+
+          const { count: mineCount, error: mineError } = await supabase
+            .from('orders')
+            .select('*', { count: 'exact', head: true })
+            .eq('executor_id', user.id)
+            .eq('status', OrderStatus.PENDING)
+            .abortSignal(signal || new AbortController().signal);
+
+          if (mineError) throw mineError;
+
+          setOpenOrdersCount((openCount || 0) + (mineCount || 0));
+        } catch (error: any) {
+          const isAbort = error.name === 'AbortError' || 
+                         (error.message && error.message.includes('AbortError')) ||
+                         (error.details && error.details.includes('AbortError'));
+                         
+          if (!isAbort) {
+            console.error('Error checking orders:', error);
+          }
+        }
       };
 
-      void checkOrders();
-      const interval = setInterval(() => void checkOrders(), 5000);
-      return () => clearInterval(interval);
-    }
-  }, [user]);
+      const controller = new AbortController();
+      
+      // Debounce initial call to avoid React Strict Mode double-invocation in dev
+      const timeoutId = setTimeout(() => {
+        void checkOrders(controller.signal);
+      }, 500);
 
-  const handleLogout = () => {
-    logout();
+      const interval = setInterval(() => void checkOrders(controller.signal), 15000);
+      
+      return () => {
+        clearTimeout(timeoutId);
+        clearInterval(interval);
+        controller.abort();
+      };
+    }
+  }, [user?.id, user?.role]);
+
+  const handleLogout = async () => {
+    await logout();
     navigate('/');
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
   };
 
   const isAuthPage = currentPath === '/auth';
@@ -69,7 +116,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     homeItem,
     {
       to: user ? '/dashboard?tab=orders' : '/auth',
-      label: 'Личный кабинет',
+      label: 'Мой кабинет',
       icon: 'fa-user-circle',
       isActive: user ? currentPath === '/dashboard' && (currentTab === 'orders' || !currentTab) : currentPath === '/auth'
     },
@@ -82,37 +129,38 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       >
         {showSidebar && (
           <>
-            <header className="md:hidden sticky top-0 z-[150] border-b border-white/5 bg-[#0B1220]/85 backdrop-blur-xl">
-              <div className="px-4 py-4 flex items-center justify-between gap-3">
-                <Link to={homeItem.to} className="flex items-center gap-3 min-w-0">
-                  <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-[#2D6BFF] to-[#1A3FA8] flex items-center justify-center shadow-lg shadow-[#2D6BFF]/20 shrink-0">
-                    <i className="fas fa-square text-white text-sm"></i>
-                  </div>
-                  <div className="font-semibold tracking-tight truncate">БезБарьеров</div>
-                </Link>
-
-                {user ? (
-                  <button
-                    onClick={handleLogout}
-                    className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition flex items-center justify-center text-slate-200 shrink-0"
-                    title="Выйти"
-                  >
-                    <i className="fas fa-arrow-right-from-bracket text-sm"></i>
-                  </button>
-                ) : (
-                  <Link
-                    to="/auth"
-                    className="inline-flex items-center justify-center rounded-xl bg-[#2D6BFF] hover:bg-[#255EE6] transition text-white font-semibold px-4 py-2 shadow-lg shadow-[#2D6BFF]/20 shrink-0"
-                  >
-                    Войти
+            {!isGlobalModalOpen && (
+              <header className="md:hidden sticky top-0 z-[150] border-b border-white/5 bg-[#0B1220]/85 backdrop-blur-xl">
+                <div className="px-4 py-4 flex items-center justify-between gap-3">
+                  <Link to="/" className="flex items-center gap-3 min-w-0">
+                    <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-[#2D6BFF] to-[#1A3FA8] flex items-center justify-center shadow-lg shadow-[#2D6BFF]/20 shrink-0">
+                      <i className="fas fa-square text-white text-sm"></i>
+                    </div>
+                    <div className="font-semibold tracking-tight truncate">БезБарьеров</div>
                   </Link>
-                )}
-              </div>
-            </header>
+                  {user ? (
+                    <button
+                      onClick={handleLogout}
+                      className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition flex items-center justify-center text-slate-200 shrink-0"
+                      title="Выйти"
+                    >
+                      <i className="fas fa-arrow-right-from-bracket text-sm"></i>
+                    </button>
+                  ) : (
+                    <Link
+                      to="/auth"
+                      className="inline-flex items-center justify-center rounded-xl bg-[#2D6BFF] hover:bg-[#255EE6] transition text-white font-semibold px-4 py-2 shadow-lg shadow-[#2D6BFF]/20 shrink-0"
+                    >
+                      Войти
+                    </Link>
+                  )}
+                </div>
+              </header>
+            )}
 
             <aside className="hidden md:flex md:flex-col w-[260px] shrink-0 border-r border-white/5 bg-[#0B1220]/85 backdrop-blur-xl">
             <div className="px-5 py-6">
-              <Link to={homeItem.to} className="flex items-center gap-3">
+              <Link to="/" className="flex items-center gap-3">
                 <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-[#2D6BFF] to-[#1A3FA8] flex items-center justify-center shadow-lg shadow-[#2D6BFF]/20">
                   <i className="fas fa-square text-white text-sm"></i>
                 </div>
@@ -181,7 +229,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               ) : (
                 <Link
                   to="/auth"
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#2D6BFF] hover:bg-[#255EE6] transition text-white font-semibold py-3 shadow-lg shadow-[#2D6BFF]/20"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#2D6BFF]/80 hover:bg-[#255EE6] transition text-white font-semibold py-3 shadow-lg shadow-[#2D6BFF]/20"
                 >
                   Войти в систему
                 </Link>
@@ -190,20 +238,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </aside>
 
           <nav className="md:hidden fixed bottom-0 inset-x-0 z-[160] border-t border-white/5 bg-[#0B1220]/90 backdrop-blur-xl">
-            <div className="px-4 py-3 grid grid-cols-2 gap-2">
+            <div className="px-4 py-3 grid grid-cols-2 gap-2 w-full">
               {navItems.map((item) => (
                 <Link
                   key={item.label}
                   to={item.to}
                   className={[
-                    'flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-medium transition border',
+                    'flex items-center justify-center gap-2 rounded-xl px-2 py-3 text-sm font-medium transition border',
                     item.isActive
                       ? 'bg-[#13213A] text-white border-[#1B2D4F]'
                       : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white'
                   ].join(' ')}
                 >
                   <i className={`fas ${item.icon} text-[14px] ${item.isActive ? 'text-[#2D6BFF]' : 'text-slate-500'}`}></i>
-                  <span>{item.label}</span>
+                  <span className="whitespace-nowrap">{item.label}</span>
                   {item.label === 'Настройки' &&
                     user?.role === UserRole.EXECUTOR &&
                     user.subscriptionStatus !== 'active' &&

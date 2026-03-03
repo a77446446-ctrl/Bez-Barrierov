@@ -151,18 +151,18 @@ const OrderMap = ({ order, hideInfo = false }: { order: Order; hideInfo?: boolea
          <div className="mt-4 bg-white p-5 rounded-2xl shadow-lg border border-gray-100 relative overflow-hidden">
               <div className="flex flex-col gap-6 relative">
                   {/* Vertical connecting line */}
-                  <div className="absolute left-[19px] top-8 bottom-8 w-0.5 bg-gradient-to-b from-careem-primary to-red-600 hidden sm:block opacity-20"></div>
+                  <div className="absolute left-[19px] top-8 bottom-8 w-0.5 bg-gradient-to-b from-green-600 to-red-600 hidden sm:block opacity-20"></div>
 
                   <div className="flex items-start gap-4 relative z-10">
-                    <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center shrink-0 border-2 border-careem-primary shadow-sm">
-                      <span className="font-bold text-careem-primary">A</span> 
+                    <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center shrink-0 border-2 border-green-600 shadow-sm">
+                      <span className="font-bold text-green-600">A</span> 
                     </div>
                     <div className="flex-1 pt-1">
-                       <p className="text-xs font-bold text-careem-primary uppercase tracking-wider mb-1">
+                       <p className="text-xs font-bold text-green-600 uppercase tracking-wider mb-1">
                           {order.serviceType === 'Транспортировка на авто' ? 'Точка отправления' : 'Адрес А'}
                        </p>
                        <p className="text-gray-900 font-medium leading-relaxed">
-                          {order.serviceType === 'Транспортировка на авто' && <span className="font-semibold text-careem-primary mr-1">Точка А:</span>}
+                          {order.serviceType === 'Транспортировка на авто' && <span className="font-semibold text-green-600 mr-1">Точка А:</span>}
                           {order.locationFrom.address || 'Точка отправления'}
                        </p>
                     </div>

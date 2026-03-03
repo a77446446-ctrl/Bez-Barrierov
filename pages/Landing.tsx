@@ -97,9 +97,14 @@ const Landing: React.FC<LandingProps> = ({ onViewProfile, onBook }) => {
 
     const loadData = async () => {
       if (supabase) {
-        const { data, error } = await supabase.from('profiles').select('*').eq('role', UserRole.EXECUTOR);
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('role', UserRole.EXECUTOR)
+          .eq('profile_verification_status', 'verified')
+          .order('created_at', { ascending: true });
         if (isActive && !error && Array.isArray(data)) {
-          setExecutors(data.map(profileRowToUser).reverse());
+          setExecutors(data.map(profileRowToUser));
         }
       } else if (isActive) {
         setExecutors([]);
@@ -190,20 +195,6 @@ const Landing: React.FC<LandingProps> = ({ onViewProfile, onBook }) => {
               </div>
               <div className="font-semibold tracking-tight text-slate-100">БезБарьеров</div>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => navigate('/auth?mode=login')}
-                className="text-sm font-semibold text-slate-300 hover:text-white transition px-3 py-2"
-              >
-                Войти
-              </button>
-              <button
-                onClick={() => navigate('/auth?mode=register&role=CUSTOMER')}
-                className="rounded-lg bg-careem-primary hover:bg-[#255EE6] transition text-white text-sm font-semibold py-2 px-4 shadow-lg shadow-[#2D6BFF]/20"
-              >
-                Регистрация
-              </button>
-            </div>
           </div>
         </header>
       )}
@@ -225,13 +216,17 @@ const Landing: React.FC<LandingProps> = ({ onViewProfile, onBook }) => {
 
       <section className="px-4 pb-10">
         <div className="max-w-5xl mx-auto">
-          <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 md:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+          <div className="rounded-3xl border border-careem-dark/50 bg-gradient-to-br from-careem-dark to-[#003822] backdrop-blur-xl p-6 md:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.35)] relative overflow-hidden">
+             {/* Decorative background effects */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-green-400/20 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-careem-accent/10 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none"></div>
+
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 relative z-10">
               <div className="max-w-2xl">
-                <h2 className="text-2xl md:text-3xl font-black tracking-tight text-slate-100">
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight text-white">
                   О проекте «Без барьеров»
                 </h2>
-                <p className="mt-3 text-sm md:text-base text-slate-300 leading-relaxed">
+                <p className="mt-3 text-sm md:text-base text-green-50/90 leading-relaxed">
                   Это сервис, который помогает людям с ограниченной мобильностью находить помощников для сопровождения,
                   перемещений по городу и повседневных задач. Наша цель — сделать доступ к помощи понятным, быстрым и
                   безопасным.
@@ -240,7 +235,7 @@ const Landing: React.FC<LandingProps> = ({ onViewProfile, onBook }) => {
                 <div className="mt-6 flex flex-col sm:flex-row gap-3">
                   <button
                     onClick={() => navigate('/terms')}
-                    className="rounded-xl bg-transparent hover:bg-white/5 transition text-slate-200 font-semibold py-3 px-5 border border-white/10 flex items-center justify-center gap-2"
+                    className="rounded-xl bg-transparent hover:bg-white/10 transition text-white/80 font-semibold py-3 px-5 border border-white/10 flex items-center justify-center gap-2"
                   >
                     <i className="fas fa-file-contract"></i>
                     Правила сервиса
@@ -318,24 +313,34 @@ const Landing: React.FC<LandingProps> = ({ onViewProfile, onBook }) => {
                   </div>
                 </div>
 
-                {!user && (
-                  <div className="mt-4 flex flex-col sm:flex-row gap-3">
+                <div className="mt-4 flex flex-col sm:flex-row gap-3">
+                  {user ? (
                     <button
-                      onClick={() => navigate('/auth?mode=login')}
-                      className="rounded-xl bg-careem-primary hover:bg-[#255EE6] transition text-white font-semibold py-3 px-5 shadow-lg shadow-[#2D6BFF]/20 flex items-center justify-center gap-2"
+                      onClick={() => navigate('/dashboard')}
+                      className="w-full rounded-xl bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-xl border border-white/20 text-white font-bold py-3 px-5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),inset_0_-4px_8px_rgba(0,0,0,0.2),0_10px_30px_rgba(0,0,0,0.3)] hover:shadow-[inset_0_1px_1px_rgba(255,255,255,0.5),inset_0_-4px_8px_rgba(0,0,0,0.2),0_15px_35px_rgba(45,107,255,0.3)] transition-all duration-300 transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
                     >
-                      <i className="fas fa-right-to-bracket"></i>
-                      Войти
+                      <i className="fas fa-columns"></i>
+                      Вернуться в Мой кабинет
                     </button>
-                    <button
-                      onClick={() => navigate('/auth?mode=register&role=CUSTOMER')}
-                      className="rounded-xl bg-white/10 hover:bg-white/15 transition text-slate-100 font-semibold py-3 px-5 border border-white/10 flex items-center justify-center gap-2"
-                    >
-                      <i className="fas fa-user-plus"></i>
-                      Регистрация
-                    </button>
-                  </div>
-                )}
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => navigate('/auth?mode=login')}
+                        className="flex-1 rounded-xl bg-careem-primary/80 hover:bg-[#255EE6] transition text-white font-semibold py-3 px-5 shadow-lg shadow-[#2D6BFF]/20 flex items-center justify-center gap-2"
+                      >
+                        <i className="fas fa-right-to-bracket"></i>
+                        Войти
+                      </button>
+                      <button
+                        onClick={() => navigate('/auth?mode=register&role=CUSTOMER')}
+                        className="flex-1 rounded-xl bg-white/10 hover:bg-white/15 transition text-slate-100 font-semibold py-3 px-5 border border-white/10 flex items-center justify-center gap-2"
+                      >
+                        <i className="fas fa-user-plus"></i>
+                        Регистрация
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>

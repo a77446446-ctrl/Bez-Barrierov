@@ -99,30 +99,26 @@ const Executors: React.FC = () => {
       return;
     }
     
-    setIsLoading(true);
-    
     let isActive = true;
-    const timeoutId = setTimeout(() => {
-      if (isActive) {
-        setIsLoading(false);
-        console.warn('Executors loading timed out');
-      }
-    }, 15000);
-
     const supabase = getSupabase();
-    if (!supabase) {
-      setIsLoading(false);
-      clearTimeout(timeoutId);
-      return;
-    }
+    
+    // Initial loading only
+    setIsLoading(true);
 
-    void (async () => {
+    const loadData = async (isBackground = false) => {
+      if (!supabase) {
+        if (!isBackground) setIsLoading(false);
+        return;
+      }
+
       try {
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
           .eq('role', UserRole.EXECUTOR)
-          .neq('subscription_status', 'active');
+          .neq('subscription_status', 'active')
+          .eq('profile_verification_status', 'verified')
+          .order('created_at', { ascending: true });
         
         if (!isActive) return;
 
@@ -142,8 +138,7 @@ const Executors: React.FC = () => {
 
         if (!user) {
           setBlockedExecutorIds([]);
-          setIsLoading(false);
-          clearTimeout(timeoutId);
+          if (!isBackground) setIsLoading(false);
           return;
         }
 
@@ -154,26 +149,26 @@ const Executors: React.FC = () => {
 
         if (!isActive) return;
 
-        if (!Array.isArray(ordersData)) {
-          setBlockedExecutorIds([]);
-        } else {
-          // We no longer block executors who have confirmed orders.
-          // All executors should be visible unless they are blocked for other reasons (not implemented yet).
-          setBlockedExecutorIds([]);
-        }
+        setBlockedExecutorIds([]);
       } catch (e) {
         console.error('Error loading executors:', e);
       } finally {
-        if (isActive) {
+        if (isActive && !isBackground) {
           setIsLoading(false);
         }
-        clearTimeout(timeoutId);
       }
-    })();
+    };
+
+    void loadData(false);
+
+    // Auto-refresh every 60 seconds
+    const intervalId = setInterval(() => {
+      void loadData(true);
+    }, 60000);
 
     return () => {
       isActive = false;
-      clearTimeout(timeoutId);
+      clearInterval(intervalId);
     };
   }, [navigate, user?.id, user?.role]);
 
@@ -191,6 +186,35 @@ const Executors: React.FC = () => {
 
   if (!user || user.role !== UserRole.CUSTOMER) return null;
 
+  const isProfileFullyFilled = useMemo(() => {
+    if (!user) return false;
+    const hasName = !!user.name && user.name.trim().length > 0;
+    const hasPhone = !!user.phone && user.phone.trim().length > 0;
+    return hasName && hasPhone;
+  }, [user]);
+
+  if (!isProfileFullyFilled) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-10 animate-in fade-in duration-300">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-8 text-center shadow-lg">
+          <div className="w-20 h-20 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <i className="fas fa-user-edit text-3xl"></i>
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">Заполните профиль</h3>
+          <p className="text-gray-600 mb-6 max-w-md mx-auto">
+            Чтобы видеть список помощников, пожалуйста, заполните свой профиль (имя и телефон).
+          </p>
+          <button
+            onClick={() => navigate('/dashboard?tab=profile')}
+            className="bg-careem-primary/80 text-white font-bold py-3 px-8 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200"
+          >
+            Перейти к профилю
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (user.subscriptionStatus === 'active') {
     return (
       <div className="max-w-5xl mx-auto px-4 py-10 animate-in fade-in duration-300">
@@ -204,7 +228,7 @@ const Executors: React.FC = () => {
           <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={() => navigate('/dashboard')}
-              className="rounded-2xl bg-careem-primary hover:bg-[#255EE6] transition text-white text-sm font-semibold py-3 px-5 shadow-lg shadow-[#2D6BFF]/20"
+              className="rounded-2xl bg-careem-primary/80 hover:bg-[#255EE6] transition text-white text-sm font-semibold py-3 px-5 shadow-lg shadow-[#2D6BFF]/20"
             >
               Перейти к заказам
             </button>
@@ -325,7 +349,7 @@ const Executors: React.FC = () => {
                       }
                     }}
                     disabled={blockedExecutorIds.includes(executor.id)}
-                    className="flex-1 rounded-2xl bg-careem-primary hover:bg-[#255EE6] transition text-white text-sm font-semibold py-2.5 shadow-lg shadow-[#2D6BFF]/20 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-careem-primary"
+                    className="flex-1 rounded-2xl bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-xl border border-white/20 text-white text-sm font-bold py-2.5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),inset_0_-4px_8px_rgba(0,0,0,0.2),0_10px_30px_rgba(0,0,0,0.3)] hover:shadow-[inset_0_1px_1px_rgba(255,255,255,0.5),inset_0_-4px_8px_rgba(0,0,0,0.2),0_15px_35px_rgba(45,107,255,0.3)] transition-all duration-300 transform hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-gradient-to-b from-white/10 to-white/5"
                   >
                     {blockedExecutorIds.includes(executor.id) ? 'Вы оставили помощнику заявку' : 'Заказать'}
                   </button>

@@ -22,7 +22,7 @@ const Admin: React.FC = () => {
         </div>
         <div className="flex gap-3">
           <button className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50">Выгрузить отчет</button>
-          <button className="px-4 py-2 bg-careem-primary text-white rounded-xl text-sm font-medium hover:bg-careem-dark">Настройки</button>
+          <button className="px-4 py-2 bg-careem-primary/80 text-white rounded-xl text-sm font-medium hover:bg-careem-dark">Настройки</button>
         </div>
       </div>
 

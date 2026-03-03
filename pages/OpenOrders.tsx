@@ -55,6 +55,30 @@ const orderRowToOrder = (row: any): Order => {
   };
 };
 
+const formatAddress = (address?: string) => {
+  if (!address) return 'Адрес не указан';
+  return address
+    .replace(/, \d{6}/, '')
+    .replace(/, Россия$/, '')
+    .replace(/^Россия, /, '')
+    .replace(/Россия, /, '');
+};
+
+const getServiceHeaderImageUrl = (serviceType: string): string | null => {
+  switch (serviceType) {
+    case 'Транспортировка на авто':
+      return 'https://img.freepik.com/premium-vector/woman-with-disability-getting-into-her-car-flat-design-illustration_218660-1010.jpg?semt=ais_hybrid&w=740';
+    case 'Помощь по дому':
+      return 'https://www.yolo.mn/img/images/ck/2021/03/31/image_01-011234-110456899.jpeg';
+    case 'Поход в магазин/аптеку':
+      return 'https://static.vecteezy.com/system/resources/previews/036/179/234/large_2x/pharmacist-and-patient-pharmacist-consultant-and-patient-in-drugstore-interior-client-buys-medication-pharma-healthcare-concept-vector.jpg';
+    case 'Прогулка и сопровождение':
+      return 'https://img.freepik.com/premium-vector/woman-help-man-with-broken-leg-in-plaster-cast-on-wheelchair-to-relax-in-public-park_251139-777.jpg';
+    default:
+      return null;
+  }
+};
+
 const OpenOrders: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -64,6 +88,10 @@ const OpenOrders: React.FC = () => {
   const [allUsers, setAllUsers] = useState<User[]>([]);
 
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<Order | null>(null);
+  useEffect(() => {
+    const evt = new CustomEvent(selectedOrderDetails ? 'global-modal-open' : 'global-modal-close');
+    window.dispatchEvent(evt);
+  }, [selectedOrderDetails]);
 
   const getSupabase = () => {
     const url = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
@@ -122,15 +150,31 @@ const OpenOrders: React.FC = () => {
     const supabase = getSupabase();
     if (!supabase) return;
     let isActive = true;
+    let stopPolling = false;
 
-    const loadOpenOrders = async () => {
-      // Check if executor has any active confirmed orders
-      const { data: activeOrders } = await supabase
+    const loadOpenOrders = async (signal?: AbortSignal) => {
+      if (stopPolling) return;
+      try {
+      // 1. Check subscription status first
+      // If subscription is pending or active, hide ALL open orders
+      if (user?.subscriptionStatus === 'pending' || user?.subscriptionStatus === 'active') {
+        setHasActiveOrder(true); // Treat as "active" to show the status message instead of "No orders"
+        setOrders([]);
+        return;
+      }
+
+      // 2. Check if executor has any active confirmed orders
+      const { data: activeOrders, error: activeOrdersError } = await supabase
         .from('orders')
         .select('id')
         .eq('executor_id', user.id)
         .eq('status', OrderStatus.CONFIRMED)
-        .limit(1);
+        .limit(1)
+        .abortSignal(signal || new AbortController().signal);
+
+      if (activeOrdersError) {
+        throw activeOrdersError;
+      }
 
       if (activeOrders && activeOrders.length > 0) {
         setHasActiveOrder(true);
@@ -140,11 +184,17 @@ const OpenOrders: React.FC = () => {
         setHasActiveOrder(false);
       }
 
-      const { data: ordersData } = await supabase
+      const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select('*')
         .eq('status', OrderStatus.OPEN)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .abortSignal(signal || new AbortController().signal);
+
+      if (ordersError) {
+        throw ordersError;
+      }
+
       if (!isActive) return;
       const loaded = Array.isArray(ordersData) ? ordersData.map(orderRowToOrder) : [];
       const cleaned = cleanupExpiredOpenOrders(loaded);
@@ -156,20 +206,42 @@ const OpenOrders: React.FC = () => {
         return;
       }
 
-      const { data, error } = await supabase.from('profiles').select('*').in('id', ids);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', ids)
+        .abortSignal(signal || new AbortController().signal);
+        
       if (!isActive) return;
       if (error || !Array.isArray(data)) {
+        if (error) throw error;
         setAllUsers([]);
         return;
       }
       setAllUsers(data.map(profileRowToUser));
+      } catch (err: any) {
+        const isAbort = err.name === 'AbortError' || 
+                       (err.message && err.message.includes('AbortError')) ||
+                       (err.details && err.details.includes('AbortError'));
+        
+        if (!isAbort) {
+          console.error('Error loading open orders:', err);
+          stopPolling = true;
+          if (!isActive) return;
+          setOrders([]);
+          setAllUsers([]);
+          setHasActiveOrder(false);
+        }
+      }
     };
 
-    void loadOpenOrders();
-    const intervalId = window.setInterval(() => void loadOpenOrders(), 5000);
+    const controller = new AbortController();
+    void loadOpenOrders(controller.signal);
+    const intervalId = window.setInterval(() => void loadOpenOrders(controller.signal), 5000);
 
     return () => {
       isActive = false;
+      controller.abort();
       window.clearInterval(intervalId);
     };
   }, [user?.id, user?.role]);
@@ -191,6 +263,45 @@ const OpenOrders: React.FC = () => {
   };
 
   if (!user || user.role !== UserRole.EXECUTOR) return null;
+
+  const isProfileFullyFilled = useMemo(() => {
+    if (!user) return false;
+    const hasName = !!user.name && user.name.trim().length > 0;
+    const hasPhone = !!user.phone && user.phone.trim().length > 0;
+    const hasLocation = !!user.locationCoordinates;
+    const hasRadius = (user.coverageRadius || 0) > 0;
+    const hasServices = user.customServices && user.customServices.some(s => s.enabled);
+    const hasDescription = !!user.description && user.description.trim().length > 0;
+    return hasName && hasPhone && hasLocation && hasRadius && hasServices && hasDescription;
+  }, [user]);
+
+  const isProfileReadyForWork = isProfileFullyFilled && user.profileVerificationStatus === 'verified';
+
+  if (!isProfileReadyForWork) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-10 animate-in fade-in duration-300">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-8 text-center shadow-lg">
+          <div className="w-20 h-20 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <i className="fas fa-user-shield text-3xl"></i>
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">Требуется верификация</h3>
+          <p className="text-gray-600 mb-6 max-w-md mx-auto">
+            {!isProfileFullyFilled 
+              ? "Чтобы видеть доступные заказы и начать работу, пожалуйста, полностью заполните свой профиль (имя, телефон, описание, местоположение и услуги)."
+              : "Ваш профиль находится на проверке. Дождитесь подтверждения администратором, чтобы получить доступ к заказам."}
+          </p>
+          {!isProfileFullyFilled && (
+            <button
+              onClick={() => navigate('/dashboard?tab=profile')}
+              className="bg-careem-primary/80 text-white font-bold py-3 px-8 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200"
+            >
+              Перейти к профилю
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 animate-in fade-in duration-300">
@@ -215,9 +326,19 @@ const OpenOrders: React.FC = () => {
               <i className="fas fa-tasks text-xl"></i>
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-100 mb-2">У вас активный заказ</h3>
+              <h3 className="text-lg font-bold text-slate-100 mb-2">
+                {user?.subscriptionStatus === 'active' 
+                  ? 'Активная подписка'
+                  : user?.subscriptionStatus === 'pending'
+                  ? 'Ожидание подтверждения подписки'
+                  : 'У вас активный заказ'}
+              </h3>
               <p className="text-sm text-slate-300 leading-relaxed mb-3">
-                Вы взяли заказ в работу. Новые заказы станут доступны после завершения текущего.
+                {user?.subscriptionStatus === 'active'
+                  ? 'Вы работаете с постоянным заказчиком в рамках подписки. В этот период доступ к общей ленте свободных заказов ограничен, чтобы вы могли сосредоточиться на текущих задачах.'
+                  : user?.subscriptionStatus === 'pending'
+                  ? 'Ваш запрос на подписку отправлен и ожидает подтверждения от заказчика. Как только он примет решение, вы получите уведомление. До этого момента доступ к новым заказам временно приостановлен.'
+                  : 'Вы уже взяли заказ в работу. Новые заказы станут доступны для просмотра после того, как вы завершите текущее задание.'}
               </p>
             </div>
           </div>
@@ -234,14 +355,28 @@ const OpenOrders: React.FC = () => {
             return (
               <div
                 key={order.id}
-                className="rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl overflow-hidden shadow-[0_18px_60px_rgba(0,0,0,0.35)]"
+                className="rounded-3xl border border-careem-dark/50 bg-gradient-to-br from-careem-dark to-[#003822] backdrop-blur-xl overflow-hidden shadow-xl group relative text-white"
               >
-                <div className="p-5">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-green-400/20 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-careem-accent/10 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none"></div>
+                <i className="fas fa-hand-holding-heart absolute -bottom-6 -right-6 text-[9rem] opacity-5 transform rotate-12 group-hover:rotate-0 group-hover:scale-110 transition duration-700 ease-out pointer-events-none"></i>
+                {getServiceHeaderImageUrl(order.serviceType) && (
+                  <div
+                    className="absolute inset-x-0 top-0 h-28 pointer-events-none"
+                    style={{
+                      backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${getServiceHeaderImageUrl(order.serviceType)})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      backgroundRepeat: 'no-repeat'
+                    }}
+                  />
+                )}
+                <div className="p-5 relative z-10">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Заказ #{order.id}</div>
+                      <div className="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Заказ: ({order.id.split('-')[0]})</div>
                       <div className="mt-1 text-lg font-extrabold text-slate-100 truncate">{order.serviceType}</div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                      <div className="mt-2 flex flex-col items-start sm:flex-row sm:flex-wrap sm:items-center gap-2 text-xs text-slate-300">
                         {order.date && (
                           <span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5">
                             <i className="fas fa-calendar-alt text-slate-400"></i>
@@ -267,7 +402,7 @@ const OpenOrders: React.FC = () => {
                   </div>
 
                   {order.details && (
-                    <p className="mt-4 text-sm text-slate-300 leading-relaxed line-clamp-3">{order.details}</p>
+                    <p className="mt-4 text-[11px] md:text-sm text-slate-300 leading-relaxed break-words">{order.details}</p>
                   )}
 
                   <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -298,15 +433,15 @@ const OpenOrders: React.FC = () => {
                   <div className="mt-5 flex gap-2">
                     <button
                       onClick={() => handleTakeOpenOrder(order.id)}
-                      className="flex-1 rounded-2xl bg-careem-primary hover:bg-[#255EE6] transition text-white text-sm font-semibold py-3 shadow-lg shadow-[#2D6BFF]/20"
+                      className="flex-1 rounded-2xl bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-xl border border-white/20 text-white text-sm font-bold py-3 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),inset_0_-4px_8px_rgba(0,0,0,0.2),0_10px_30px_rgba(0,0,0,0.3)] hover:shadow-[inset_0_1px_1px_rgba(255,255,255,0.5),inset_0_-4px_8px_rgba(0,0,0,0.2),0_15px_35px_rgba(45,107,255,0.3)] transition-all duration-300 transform hover:-translate-y-0.5"
                     >
                       Взять в работу
                     </button>
                     <button
                       onClick={() => setSelectedOrderDetails(order)}
-                      className="rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition text-slate-100 text-sm font-semibold py-3 px-4"
+                      className="flex-1 rounded-2xl bg-[#334155] hover:bg-[#475569] transition text-white text-sm font-semibold py-3 shadow-lg shadow-slate-900/20"
                     >
-                      Подробнее о заказе
+                      Подробнее
                     </button>
                   </div>
                 </div>
@@ -318,7 +453,7 @@ const OpenOrders: React.FC = () => {
 
       {selectedOrderDetails && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200"
           onClick={() => setSelectedOrderDetails(null)}
         >
           <div
@@ -416,31 +551,56 @@ const OpenOrders: React.FC = () => {
               )}
 
               <div className="mb-6">
-                <h4 className="text-sm font-bold text-gray-900 mb-2">Карта, точки и адрес</h4>
+                <h4 className="text-sm font-bold text-gray-900 mb-2">Маршрут и адрес</h4>
                 
                 {selectedOrderDetails.locationFrom && selectedOrderDetails.locationTo ? (
                   <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                      <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                        <p className="text-xs font-bold text-gray-500 uppercase mb-1">Точка А (откуда)</p>
-                        <p className="text-sm text-gray-900 leading-relaxed">{selectedOrderDetails.locationFrom.address || 'Не указано'}</p>
+                    <div className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                      <div className="bg-gray-50 rounded-xl border border-gray-100 p-3 flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center shrink-0 border border-green-600 shadow-sm">
+                          <span className="font-bold text-green-600 text-xs">A</span>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold uppercase text-gray-400 mb-1">Откуда</p>
+                          <p className="text-gray-800 leading-tight">
+                            {formatAddress(selectedOrderDetails.locationFrom.address)}
+                          </p>
+                        </div>
                       </div>
-                      <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                        <p className="text-xs font-bold text-gray-500 uppercase mb-1">Точка Б (куда)</p>
-                        <p className="text-sm text-gray-900 leading-relaxed">{selectedOrderDetails.locationTo.address || 'Не указано'}</p>
+                      <div className="bg-gray-50 rounded-xl border border-gray-100 p-3 flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center shrink-0 border border-red-600 shadow-sm">
+                          <span className="font-bold text-red-600 text-xs">B</span>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold uppercase text-gray-400 mb-1">Куда</p>
+                          <p className="text-gray-800 leading-tight">
+                            {formatAddress(selectedOrderDetails.locationTo.address)}
+                          </p>
+                        </div>
                       </div>
+                    </div>
+                    <div className="h-64 w-full rounded-2xl overflow-hidden border border-gray-200">
+                      <OrderMap order={selectedOrderDetails} hideInfo />
                     </div>
                   </>
                 ) : selectedOrderDetails.generalLocation ? (
-                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-3">
-                     <p className="text-xs font-bold text-gray-500 uppercase mb-1">Место встречи</p>
-                     <p className="text-sm text-gray-900 leading-relaxed">{selectedOrderDetails.generalLocation.address || 'Не указано'}</p>
-                   </div>
-                ) : null}
-                
-                <div className="h-64 w-full rounded-2xl overflow-hidden border border-gray-200">
-                   <OrderMap order={selectedOrderDetails} hideInfo />
-                </div>
+                   <>
+                     <div className="mb-3 bg-gray-50 rounded-xl border border-gray-100 p-3 text-sm flex items-start gap-3">
+                       <i className="fas fa-map-marker-alt text-red-500 mt-1 shrink-0 text-lg"></i>
+                       <div>
+                         <p className="text-[11px] font-bold uppercase text-gray-400 mb-1">Адрес</p>
+                         <p className="text-gray-800">
+                           {formatAddress(selectedOrderDetails.generalLocation.address)}
+                         </p>
+                       </div>
+                     </div>
+                     <div className="h-64 w-full rounded-2xl overflow-hidden border border-gray-200">
+                       <OrderMap order={selectedOrderDetails} hideInfo />
+                     </div>
+                   </>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">Адрес уточняется у заказчика</p>
+                )}
               </div>
             </div>
             
@@ -450,7 +610,7 @@ const OpenOrders: React.FC = () => {
                      handleTakeOpenOrder(selectedOrderDetails.id);
                      setSelectedOrderDetails(null);
                   }}
-                  className="w-full bg-careem-primary text-white font-bold py-4 px-6 rounded-xl hover:bg-[#255EE6] transition shadow-lg shadow-[#2D6BFF]/20 text-lg"
+                  className="w-full bg-careem-primary/80 text-white font-bold py-4 px-6 rounded-xl hover:bg-[#255EE6] transition shadow-lg shadow-[#2D6BFF]/20 text-lg"
                >
                   Взять в работу
                </button>

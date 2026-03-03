@@ -96,6 +96,14 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
         toast(msg);
         return;
       }
+      
+      if (msg === 'ACCOUNT_DELETED_BUT_AUTH_EXISTS') {
+        toast.error('Аккаунт удален не полностью. Для завершения регистрации восстановите пароль.', { duration: 6000 });
+        setIsReset(true);
+        setIsLogin(true);
+        return;
+      }
+
       toast.error(msg);
     } finally {
       setIsLoading(false);
@@ -212,7 +220,7 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
               onClick={() => setIsLogin(true)}
               className={[
                 'flex-1 rounded-xl py-2.5 text-sm font-semibold transition',
-                isLogin ? 'bg-careem-primary text-white shadow-md shadow-[#2D6BFF]/20' : 'text-slate-400 hover:text-slate-100'
+                isLogin ? 'bg-careem-primary/80 text-white shadow-md shadow-[#2D6BFF]/20' : 'text-slate-400 hover:text-slate-100'
               ].join(' ')}
             >
               Вход
@@ -222,7 +230,7 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
               onClick={() => setIsLogin(false)}
               className={[
                 'flex-1 rounded-xl py-2.5 text-sm font-semibold transition',
-                !isLogin ? 'bg-careem-primary text-white shadow-md shadow-[#2D6BFF]/20' : 'text-slate-400 hover:text-slate-100'
+                !isLogin ? 'bg-careem-primary/80 text-white shadow-md shadow-[#2D6BFF]/20' : 'text-slate-400 hover:text-slate-100'
               ].join(' ')}
             >
               Новый аккаунт
@@ -368,7 +376,7 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
 
             <button
               disabled={isLoading}
-              className="w-full rounded-xl bg-careem-primary hover:bg-[#255EE6] disabled:opacity-60 disabled:hover:bg-careem-primary transition text-white font-semibold py-3.5 shadow-lg shadow-[#2D6BFF]/20 flex items-center justify-center gap-2"
+              className="w-full rounded-xl bg-careem-primary/80 hover:bg-[#255EE6] disabled:opacity-60 disabled:hover:bg-careem-primary transition text-white font-semibold py-3.5 shadow-lg shadow-[#2D6BFF]/20 flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>

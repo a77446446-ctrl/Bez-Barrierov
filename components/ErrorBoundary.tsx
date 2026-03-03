@@ -43,7 +43,7 @@ class ErrorBoundary extends React.Component<Props, State> {
                 </div>
                 <button 
                     onClick={() => window.location.reload()}
-                    className="w-full bg-careem-primary text-white py-2 px-4 rounded hover:bg-careem-dark transition flex items-center justify-center gap-2"
+                    className="w-full bg-careem-primary/80 text-white py-2 px-4 rounded hover:bg-careem-dark transition flex items-center justify-center gap-2"
                 >
                     <i className="fas fa-sync-alt"></i> Обновить страницу
                 </button>

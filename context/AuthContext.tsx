@@ -8,7 +8,7 @@ interface AuthContextType {
   register: (name: string, email: string, password: string, role: UserRole) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   /* ... existing code ... */
   updateUser: (user: User) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
@@ -272,6 +272,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) {
           if (/invalid login credentials/i.test(signInError.message)) {
+            // Check if profile exists to distinguish between "Active User" and "Zombie User" (deleted profile but kept auth)
+            const existingProfile = await fetchProfileByEmail(supabase, email);
+            if (!existingProfile) {
+               throw new Error('ACCOUNT_DELETED_BUT_AUTH_EXISTS');
+            }
             throw new Error('Этот email уже зарегистрирован. Неверный пароль. Войдите или восстановите пароль.');
           }
           throw signInError;

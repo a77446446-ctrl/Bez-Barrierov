@@ -238,7 +238,13 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
     <div className="py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Profile Header */}
-        <div className="rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl overflow-hidden shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
+        <div className="relative rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl overflow-hidden shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
+          <button 
+            onClick={() => navigate(-1)}
+            className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md text-white border border-white/20 transition-all shadow-lg"
+          >
+            <i className="fas fa-times"></i>
+          </button>
           <div className="h-28 sm:h-32 w-full bg-gradient-to-r from-[#2D6BFF]/35 via-[#13213A] to-[#0B1220]"></div>
           <div className="px-6 pb-6 sm:px-8 sm:pb-8">
             <div className="-mt-12 sm:-mt-16 flex flex-col sm:flex-row sm:items-end gap-4">
@@ -282,7 +288,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
                       }
                     }}
                     disabled={hasPendingRequest}
-                    className="w-full sm:w-auto px-5 py-3 rounded-2xl text-sm font-semibold text-white bg-careem-primary hover:bg-[#255EE6] transition shadow-lg shadow-[#2D6BFF]/20 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-careem-primary"
+                    className="w-full sm:w-auto px-5 py-3 rounded-2xl text-sm font-bold text-white bg-gradient-to-b from-white/10 to-white/5 backdrop-blur-xl border border-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.4),inset_0_-4px_8px_rgba(0,0,0,0.2),0_10px_30px_rgba(0,0,0,0.3)] hover:shadow-[inset_0_1px_1px_rgba(255,255,255,0.5),inset_0_-4px_8px_rgba(0,0,0,0.2),0_15px_35px_rgba(45,107,255,0.3)] transition-all duration-300 transform hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-gradient-to-b from-white/10 to-white/5"
                   >
                     {hasPendingRequest ? 'Вы оставили помощнику заявку' : 'Заказать услугу'}
                   </button>

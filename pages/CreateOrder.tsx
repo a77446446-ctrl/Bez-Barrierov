@@ -363,9 +363,13 @@ const CreateOrder: React.FC = () => {
   const [allowOpenSelection, setAllowOpenSelection] = useState(true);
   const [details, setDetails] = useState('');
   const [isRecording, setIsRecording] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const [voiceMessage, setVoiceMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+
   const [executors, setExecutors] = useState<any[]>([]);
   const [realRatings, setRealRatings] = useState<Record<string, string>>({});
 
@@ -558,6 +562,15 @@ const CreateOrder: React.FC = () => {
     };
   }, [user, isLoading, preselectedExecutorId, navigate]);
 
+  // Cleanup media recorder on unmount
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -578,34 +591,55 @@ const CreateOrder: React.FC = () => {
       });
 
       const recorder = supportedMimeType ? new MediaRecorder(stream, { mimeType: supportedMimeType }) : new MediaRecorder(stream);
-      const chunks: BlobPart[] = [];
+      mediaRecorderRef.current = recorder;
+      chunksRef.current = [];
 
-      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+
       recorder.onstop = () => {
+        setIsProcessingAudio(true);
+        
+        if (chunksRef.current.length === 0) {
+          setIsProcessingAudio(false);
+          return;
+        }
+
         const blobType =
           recorder.mimeType ||
-          (chunks[0] instanceof Blob ? chunks[0].type : '') ||
+          (chunksRef.current[0] instanceof Blob ? chunksRef.current[0].type : '') ||
           supportedMimeType ||
           'audio/webm';
-        const blob = new Blob(chunks, { type: blobType });
+        
+        const blob = new Blob(chunksRef.current, { type: blobType });
+        
         void (async () => {
           try {
+            // Try to convert to WAV for better compatibility
             const wavDataUrl = await audioBlobToWavDataUrl(blob);
             setVoiceMessage(wavDataUrl);
-          } catch {
+          } catch (error) {
+            console.error('Audio conversion failed:', error);
+            // Fallback to basic reader if conversion fails
             const reader = new FileReader();
             reader.readAsDataURL(blob);
             reader.onloadend = () => {
-              setVoiceMessage(reader.result as string);
+              if (typeof reader.result === 'string') {
+                setVoiceMessage(reader.result);
+              }
             };
           } finally {
             stream.getTracks().forEach(track => track.stop());
+            setIsProcessingAudio(false);
           }
         })();
       };
 
-      recorder.start();
-      setMediaRecorder(recorder);
+      // Use timeslice (200ms) to ensure data is available periodically
+      recorder.start(200);
       setIsRecording(true);
     } catch (err) {
       toast.error('Не удалось получить доступ к микрофону');
@@ -613,15 +647,20 @@ const CreateOrder: React.FC = () => {
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorder && isRecording) {
-      mediaRecorder.stop();
+  const stopRecording = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
+    if (mediaRecorderRef.current && isRecording) {
+      setIsProcessingAudio(true); // Set processing state immediately to prevent UI flicker
+      mediaRecorderRef.current.stop();
       setIsRecording(false);
-      setMediaRecorder(null);
     }
   };
 
-  const clearRecording = () => {
+  const clearRecording = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     setVoiceMessage(null);
   };
 
@@ -875,12 +914,9 @@ const CreateOrder: React.FC = () => {
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="shadow-sm focus:ring-2 focus:ring-careem-primary/60 focus:border-careem-primary block w-full sm:text-sm border border-white/10 rounded-xl py-3 pl-4 pr-12 bg-[#0B1220]/60 text-slate-100 [color-scheme:dark]"
+                  className="shadow-sm focus:ring-2 focus:ring-careem-primary/60 focus:border-careem-primary block w-full sm:text-sm border border-white/10 rounded-xl py-3 pl-4 pr-4 bg-[#0B1220]/60 text-slate-100 [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-80 [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                   min={new Date().toISOString().split('T')[0]}
                 />
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                  <i className="fas fa-calendar-alt text-green-500 text-xl"></i>
-                </div>
               </div>
             </div>
             <div>
@@ -892,11 +928,8 @@ const CreateOrder: React.FC = () => {
                   type="time"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
-                  className="shadow-sm focus:ring-2 focus:ring-careem-primary/60 focus:border-careem-primary block w-full sm:text-sm border border-white/10 rounded-xl py-3 pl-4 pr-12 bg-[#0B1220]/60 text-slate-100 [color-scheme:dark]"
+                  className="shadow-sm focus:ring-2 focus:ring-careem-primary/60 focus:border-careem-primary block w-full sm:text-sm border border-white/10 rounded-xl py-3 pl-4 pr-4 bg-[#0B1220]/60 text-slate-100 [color-scheme:dark] [&::-webkit-calendar-picker-indicator]:opacity-80 [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                 />
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                  <i className="fas fa-clock text-orange-500 text-xl"></i>
-                </div>
               </div>
             </div>
           </div>
@@ -921,7 +954,7 @@ const CreateOrder: React.FC = () => {
               Голосовое сообщение (для помощника)
             </label>
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              {!isRecording && !voiceMessage && (
+              {!isRecording && !voiceMessage && !isProcessingAudio && (
                 <button
                   type="button"
                   onClick={startRecording}
@@ -930,6 +963,13 @@ const CreateOrder: React.FC = () => {
                   <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
                   Записать сообщение
                 </button>
+              )}
+
+              {isProcessingAudio && (
+                <div className="flex items-center gap-3 text-slate-300 bg-white/5 px-4 py-2.5 rounded-2xl border border-white/10">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-careem-primary"></div>
+                  <span>Обработка записи...</span>
+                </div>
               )}
 
               {isRecording && (
@@ -1036,15 +1076,15 @@ const CreateOrder: React.FC = () => {
              </div>
              <button
               type="submit"
-              disabled={isSubmitting}
-              className={`bg-careem-primary text-white font-semibold py-3 px-8 rounded-2xl hover:bg-[#255EE6] transition shadow-lg shadow-[#2D6BFF]/20 flex items-center justify-center gap-2 w-full sm:w-auto ${
-                isSubmitting ? 'opacity-70 cursor-wait' : ''
+              disabled={isSubmitting || isProcessingAudio || isRecording}
+              className={`bg-careem-primary/80 text-white font-semibold py-3 px-8 rounded-2xl hover:bg-[#255EE6] transition shadow-lg shadow-[#2D6BFF]/20 flex items-center justify-center gap-2 w-full sm:w-auto ${
+                (isSubmitting || isProcessingAudio || isRecording) ? 'opacity-70 cursor-wait' : ''
               }`}
             >
-              {isSubmitting ? (
+              {isSubmitting || isProcessingAudio ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Создание...
+                  {isProcessingAudio ? 'Обработка...' : 'Создание...'}
                 </>
               ) : (
                 <>
