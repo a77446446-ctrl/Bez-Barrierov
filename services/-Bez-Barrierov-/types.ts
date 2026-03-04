@@ -21,6 +21,9 @@ export interface User {
   telegramId?: string;
   avatar?: string;
   isSubscribed?: boolean;
+  // Subscription fields
+  subscriptionStatus?: 'none' | 'pending' | 'active' | 'expired' | 'rejected';
+  subscriptionStartDate?: string; // ISO date
   rating?: number;
   location?: string;
   description?: string;
@@ -30,6 +33,8 @@ export interface ServiceType {
   id: string;
   name: string;
   pricePerHour: number;
+  headerImage?: string;
+  headerColor?: string;
 }
 
 export interface Order {

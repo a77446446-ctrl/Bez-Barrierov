@@ -121,6 +121,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const verificationTimerRef = useRef<number | null>(null);
   const profileIdColumnRef = useRef<'id' | 'user_id'>('id');
   const userRef = useRef(user);
+  const lastLocalUpdateRef = useRef<number>(0);
 
   useEffect(() => {
     userRef.current = user;
@@ -982,19 +983,65 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   }, [hasUnsavedChanges, isExecutor, profileVerificationStatus]);
 
   useEffect(() => {
-    if (user.role !== UserRole.EXECUTOR) return;
+    // Global Auto-Refresh Logic (Every 30 seconds)
+    // This ensures both Customer and Executor stay in sync even if Realtime events are missed
+    const refreshData = async () => {
+      if (document.hidden) return; // Don't refresh if tab is background
+      
+      // Prevent race condition: If we just updated locally (within 5s), skip refresh
+      // This avoids overwriting optimistic UI updates with stale server data
+      if (Date.now() - lastLocalUpdateRef.current < 5000) return;
 
-    const cleanup = () => {
-      setOrders((current) => {
-        const cleaned = cleanupExpiredOpenOrders(current);
-        return cleaned;
-      });
+      const supabase = getSupabase();
+      if (!supabase) return;
+
+      try {
+        // 1. Refresh User Profile
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser) {
+           const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
+           if (profile) {
+              const mappedUser = profileRowToUser(profile);
+              
+              // Only update if something changed (deep comparison or critical fields)
+              // But we can't use JSON.stringify on the whole object if it has functions or circular refs (unlikely for mappedUser)
+              // Better to just update. updateUser handles state merging usually?
+              // Actually, updateUser in useAuth replaces the state.
+              // Let's do a simple check on critical fields to avoid rerender loops if object ref changes
+              if (
+                  mappedUser.subscriptionStatus !== user.subscriptionStatus ||
+                  mappedUser.subscriptionRequestToCustomerId !== user.subscriptionRequestToCustomerId ||
+                  mappedUser.subscribedToCustomerId !== user.subscribedToCustomerId ||
+                  mappedUser.role !== user.role
+              ) {
+                 updateUser(mappedUser);
+              }
+           }
+        }
+
+        // 2. Refresh Orders (if needed)
+        const { data: ordersData } = await supabase.from('orders').select('*');
+        if (ordersData) {
+           const mappedOrders = ordersData.map(orderRowToOrder);
+           // Simple length check or timestamp check could be better, but full replace is safest for sync
+           setOrders(mappedOrders);
+        }
+
+        // 3. Refresh All Users (for finding counterparts)
+        const { data: profilesData } = await supabase.from('profiles').select('*');
+        if (profilesData) {
+           const mappedProfiles = profilesData.map(profileRowToUser);
+           setAllUsers(mappedProfiles);
+        }
+
+      } catch (err) {
+        console.warn('Auto-refresh failed:', err);
+      }
     };
 
-    cleanup();
-    const intervalId = window.setInterval(cleanup, 30_000);
+    const intervalId = window.setInterval(refreshData, 30_000); // 30 seconds
     return () => window.clearInterval(intervalId);
-  }, [user.role]);
+  }, [user, updateUser]);
 
   // Self-Repair Logic for Subscriptions (Handles RLS issues)
   useEffect(() => {
@@ -1022,11 +1069,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
       }
       // 1.2 REJECTION CHECK
       else if (customer.subscriptionRequestToCustomerId === `REJECTED:${user.id}`) {
+        // If already rejected, wait for user confirmation
+        if (user.subscriptionStatus === 'rejected') return;
+        
         console.log('Self-repair: Customer rejected me!');
         const updatedMe = {
           ...user,
-          subscriptionStatus: 'none' as const,
-          subscriptionRequestToCustomerId: undefined
+          subscriptionStatus: 'rejected' as const,
+          // Keep request ID to maintain link if needed, or clear it. 
+          // Clearing it might break the check if we relied on it.
+          // But here we rely on the Customer's signal.
+          subscriptionRequestToCustomerId: undefined 
         };
         updateUser(updatedMe);
       }
@@ -1493,6 +1546,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError, setDeleteError] = useState('');
+  
+  // Subscription Rejection Modal State
+  const [rejectSubscriptionId, setRejectSubscriptionId] = useState<string | null>(null);
 
   const handleDeleteProfile = async () => {
     if (!deletePassword.trim()) {
@@ -1657,6 +1713,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
     // Update local state
     setAllUsers(prev => prev.map(u => (u.id === user.id ? updatedUser : u)));
     updateUser(updatedUser); // Handles DB update in background
+    lastLocalUpdateRef.current = Date.now();
+
+    // EXPLICIT DB UPDATE: Ensure the status is persisted immediately to avoid race conditions
+    const supabase = getSupabase();
+    if (supabase) {
+        try {
+            const col = await resolveProfileIdColumn(supabase);
+            await supabase.from('profiles').update(userToProfileUpdate(updatedUser)).eq(col, user.id);
+        } catch (e) {
+            console.error('Error persisting subscription request:', e);
+        }
+    }
   };
 
   const handleRejectSubscription = async (executorId: string) => {
@@ -1674,10 +1742,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
       read: false
     };
 
-    // Update Executor: status=none, remove request, add notification
+    // Update Executor: status=rejected, remove request, add notification
     const updatedExecutor = {
       ...executor,
-      subscriptionStatus: 'none' as const,
+      subscriptionStatus: 'rejected' as const,
       subscriptionRequestToCustomerId: undefined,
       notifications: [notification, ...(executor.notifications || [])]
     };
@@ -1699,23 +1767,34 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
     // 1. Optimistic UI Update
     setAllUsers(updatedAllUsers);
     updateUser(updatedCustomer); // Update local user state immediately
-    setTimeout(() => alert('Запрос на подписку отклонен.'), 50);
-
+    lastLocalUpdateRef.current = Date.now();
+    
     // 2. Background DB Update
     const supabase = getSupabase();
     if (supabase) {
       resolveProfileIdColumn(supabase).then(col => {
-        // We try to update Executor (might fail due to RLS) AND Customer (should succeed)
-        Promise.all([
-          supabase.from('profiles').update(userToProfileUpdate(updatedExecutor)).eq(col, executorId)
-            .then(({ error }) => {
-              if (error) console.warn('Failed to update executor profile (RLS?):', error);
-            }),
-          supabase.from('profiles').update(userToProfileUpdate(updatedCustomer)).eq(col, user.id)
-            .then(({ error }) => {
-               if (error) console.error('Failed to update customer profile:', error);
-            })
-        ]).then();
+        // We update Executor directly via RPC or standard update if RLS allows
+        // Since Customer usually can't update Executor profile directly due to RLS,
+        // we might need to rely on the Customer's own signal or a server function.
+        // However, for this demo/MVP, we try direct update. 
+        // IF RLS BLOCKS THIS, we need a different approach (e.g., 'subscription_requests' table).
+        // Current workaround: The Customer 'signals' via their own profile (already done above),
+        // and the Executor 'pulls' this state via Realtime subscription or polling.
+        
+        // BUT, to ensure persistence, we MUST try to write the Executor state.
+        supabase.from('profiles').update(userToProfileUpdate(updatedExecutor)).eq(col, executorId)
+          .then(({ error }) => {
+             if (error) {
+               console.warn('RLS blocked Executor update. Using signal channel.', error);
+               // If RLS blocks, we rely on the signal we set on the Customer profile:
+               // subscriptionRequestToCustomerId: `REJECTED:${executorId}`
+             }
+          });
+
+        supabase.from('profiles').update(userToProfileUpdate(updatedCustomer)).eq(col, user.id)
+          .then(({ error }) => {
+             if (error) console.error('Failed to update customer profile:', error);
+          });
       });
     }
   };
@@ -1768,6 +1847,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
     // 1. Optimistic UI Update
     setAllUsers(updatedAllUsers);
     updateUser(updatedCustomer); // This handles the DB update for the customer
+    lastLocalUpdateRef.current = Date.now();
     
     // Alert immediately (optimistic)
     setTimeout(() => alert('Подписка подтверждена!'), 50);
@@ -1778,6 +1858,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
       resolveProfileIdColumn(supabase).then(col => {
         supabase.from('profiles').update(userToProfileUpdate(updatedExecutor)).eq(col, executorId)
           .catch(err => console.warn('Failed to update executor profile (RLS?):', err));
+          
+        // Explicitly update customer too to be safe (redundant with updateUser but safer)
+        supabase.from('profiles').update(userToProfileUpdate(updatedCustomer)).eq(col, user.id)
+          .catch(err => console.error('Failed to update customer profile:', err));
       });
     }
   };
@@ -1806,6 +1890,47 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
     setAllUsers(updatedAllUsers);
     await updateUser(updatedUser);
+  };
+
+  const handleDismissRejection = async () => {
+    // Reset Executor status to 'none' so they can try again
+    const updatedUser = {
+      ...user,
+      subscriptionStatus: 'none' as const,
+      subscriptionRequestToCustomerId: undefined
+    };
+    
+    // Optimistic UI Update
+    updateUser(updatedUser);
+    
+    // Background DB Update
+    const supabase = getSupabase();
+    if (supabase) {
+      resolveProfileIdColumn(supabase).then(col => {
+        supabase.from('profiles').update(userToProfileUpdate(updatedUser)).eq(col, user.id).then();
+      });
+    }
+  };
+
+  const handleCancelRequest = async () => {
+    // Executor cancels their own pending request
+    const updatedUser = {
+      ...user,
+      subscriptionStatus: 'none' as const,
+      subscriptionRequestToCustomerId: undefined
+    };
+    
+    // Optimistic UI Update
+    updateUser(updatedUser);
+    lastLocalUpdateRef.current = Date.now();
+    
+    // Background DB Update
+    const supabase = getSupabase();
+    if (supabase) {
+      resolveProfileIdColumn(supabase).then(col => {
+        supabase.from('profiles').update(userToProfileUpdate(updatedUser)).eq(col, user.id).then();
+      });
+    }
   };
 
   const handleCancelSubscription = async () => {
@@ -1890,6 +2015,19 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
          };
          
          if (supabase) {
+             // 1. Delete any active subscription order to prevent duplicates/stale data
+             // We look for 'CONFIRMED' or 'PENDING' orders with 'Подписка' service type or generic
+             const { data: activeOrders } = await supabase.from('orders').select('id')
+                .eq('customer_id', user.id)
+                .eq('executor_id', executorId)
+                .in('status', ['CONFIRMED', 'PENDING'])
+                .eq('service_type', 'Подписка'); // Assume specific type
+
+             if (activeOrders && activeOrders.length > 0) {
+                await supabase.from('orders').delete().in('id', activeOrders.map(o => o.id));
+             }
+
+             // 2. Insert History Record
              supabase.from('orders').insert(historyOrder).then(({ error }) => {
                  if (error) console.error('Error logging subscription history:', error);
              });
@@ -1969,20 +2107,19 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
           // NEW: Find and delete the active order associated with this subscription
           // We look for a CONFIRMED order between these two users
-          const activeOrder = orders.find(o => 
-             o.executorId === user.id && 
-             o.customerId === customerId && 
-             (o.status === OrderStatus.CONFIRMED || o.status === OrderStatus.PENDING)
-          );
+          if (supabase) {
+             const { data: activeOrders } = await supabase.from('orders').select('id')
+                .eq('customer_id', customerId)
+                .eq('executor_id', user.id)
+                .in('status', ['CONFIRMED', 'PENDING'])
+                .eq('service_type', 'Подписка'); // Check service type too
 
-          if (activeOrder && supabase) {
-             // Delete from DB
-             supabase.from('orders').delete().eq('id', activeOrder.id).then(({ error }) => {
-                if (error) console.error('Error deleting active order:', error);
-                else console.log('Active order deleted:', activeOrder.id);
-             });
-             // Remove from local state immediately
-             setOrders(prev => prev.filter(o => o.id !== activeOrder.id));
+             if (activeOrders && activeOrders.length > 0) {
+                // Delete from DB
+                await supabase.from('orders').delete().in('id', activeOrders.map(o => o.id));
+                // Remove from local state immediately
+                setOrders(prev => prev.filter(o => !activeOrders.some(ao => ao.id === o.id)));
+             }
           }
 
           // 3. Create Subscription History Record
@@ -2096,19 +2233,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
     }
   };
 
-  const getServiceHeaderImageUrl = (serviceType: string): string | null => {
-    switch (serviceType) {
-      case 'Транспортировка на авто':
-        return 'https://img.freepik.com/premium-vector/woman-with-disability-getting-into-her-car-flat-design-illustration_218660-1010.jpg?semt=ais_hybrid&w=740';
-      case 'Помощь по дому':
-        return 'https://www.yolo.mn/img/images/ck/2021/03/31/image_01-011234-110456899.jpeg';
-      case 'Поход в магазин/аптеку':
-        return 'https://static.vecteezy.com/system/resources/previews/036/179/234/large_2x/pharmacist-and-patient-pharmacist-consultant-and-patient-in-drugstore-interior-client-buys-medication-pharma-healthcare-concept-vector.jpg';
-      case 'Прогулка и сопровождение':
-        return 'https://img.freepik.com/premium-vector/woman-help-man-with-broken-leg-in-plaster-cast-on-wheelchair-to-relax-in-public-park_251139-777.jpg';
-      default:
-        return null;
-    }
+  const getServiceHeaderInfo = (serviceType: string) => {
+    const service = SERVICE_TYPES.find(st => st.name === serviceType);
+    if (!service || !service.headerImage) return null;
+    return { image: service.headerImage, color: service.headerColor || 'transparent' };
   };
 
   // Check for subscription expiry (mock logic)
@@ -2134,6 +2262,32 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 animate-in slide-in-from-right-4 duration-500">
+      {/* Executor Subscription Status Overlay (Rejected ONLY) */}
+      {user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'rejected' && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full shadow-xl text-center space-y-4 animate-in zoom-in-95 duration-200">
+            
+            {/* REJECTED STATE */}
+            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <i className="fas fa-times-circle text-3xl text-red-600 dark:text-red-400"></i>
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+              Отказ в подписке
+            </h3>
+            <p className="text-gray-600 dark:text-gray-300">
+              Вам отказ в подписке с заказчиком попробуйте оформить подписку с другим заказчиком
+            </p>
+            <button
+              onClick={handleDismissRejection}
+              className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition shadow-lg shadow-red-200"
+            >
+              Понял
+            </button>
+
+          </div>
+        </div>
+      )}
+
       {/* Notifications */}
       {user.notifications && user.notifications.length > 0 && (
         <div className="mb-8 space-y-4">
@@ -2250,7 +2404,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
             u.role === UserRole.EXECUTOR &&
             u.subscriptionStatus === 'pending' &&
             u.subscriptionRequestToCustomerId === user.id &&
-            u.id !== user.subscribedExecutorId
+            u.id !== user.subscribedExecutorId &&
+            user.subscriptionRequestToCustomerId !== `REJECTED:${u.id}`
           );
 
           if (pendingRequests.length === 0) return null;
@@ -2270,16 +2425,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   </div>
                   <div className="flex gap-2 w-full sm:w-auto">
                     <button
-                      onClick={async () => {
-                        await handleRejectSubscription(requester.id);
-                        const pendingOrder = orders.find(o => 
-                          o.status === OrderStatus.PENDING && 
-                          o.executorId === requester.id
-                        );
-                        if (pendingOrder) {
-                          await handleDeleteOrder(pendingOrder.id);
-                        }
-                      }}
+                      onClick={() => setRejectSubscriptionId(requester.id)}
                       className="flex-1 sm:flex-none bg-red-50 text-red-600 font-bold py-3 sm:py-2 px-4 rounded-xl hover:bg-red-100 transition shadow-sm border border-red-100 text-center justify-center"
                     >
                       Отказать
@@ -2326,13 +2472,25 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
             <nav className="space-y-1">
               <button
                 onClick={handleGoToProfile}
-                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition border ${activeTab === 'profile' ? 'bg-gradient-to-br from-careem-dark to-[#003822] text-white border-careem-dark/50 shadow-lg' : 'bg-gradient-to-br from-careem-dark/40 to-[#003822]/40 text-gray-700 border-gray-100 hover:from-careem-dark/55 hover:to-[#003822]/55 hover:shadow-md'}`}
+                disabled={user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'pending'}
+                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition border ${activeTab === 'profile' 
+                  ? 'bg-gradient-to-br from-careem-dark to-[#003822] text-white border-careem-dark/50 shadow-lg' 
+                  : user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'pending'
+                    ? 'text-gray-400 cursor-not-allowed opacity-50 bg-gray-50 border-gray-100'
+                    : 'bg-gradient-to-br from-careem-dark/40 to-[#003822]/40 text-gray-700 border-gray-100 hover:from-careem-dark/55 hover:to-[#003822]/55 hover:shadow-md'
+                }`}
               >
                 <i className="fas fa-user-circle mr-3"></i> Профиль
               </button>
               <button
                 onClick={handleGoToOrders}
-                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition relative border ${activeTab === 'orders' && !showOpenOrders ? 'bg-gradient-to-br from-careem-dark to-[#003822] text-white border-careem-dark/50 shadow-lg' : 'bg-gradient-to-br from-careem-dark/40 to-[#003822]/40 text-gray-700 border-gray-100 hover:from-careem-dark/55 hover:to-[#003822]/55 hover:shadow-md'}`}
+                disabled={user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'pending'}
+                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition relative border ${activeTab === 'orders' && !showOpenOrders 
+                  ? 'bg-gradient-to-br from-careem-dark to-[#003822] text-white border-careem-dark/50 shadow-lg' 
+                  : user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'pending'
+                    ? 'text-gray-400 cursor-not-allowed opacity-50 bg-gray-50 border-gray-100'
+                    : 'bg-gradient-to-br from-careem-dark/40 to-[#003822]/40 text-gray-700 border-gray-100 hover:from-careem-dark/55 hover:to-[#003822]/55 hover:shadow-md'
+                }`}
               >
                 <i className="fas fa-home mr-3"></i> {user.subscriptionStatus === 'active' ? 'Статус подписки' : 'Мои заказы'}
                 
@@ -2360,10 +2518,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
               </button>
               <button
                 onClick={handleGoToHistory}
-                disabled={user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'active'}
+                disabled={(user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'active') || (user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'pending')}
                 className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition border ${activeTab === 'history' 
                   ? 'bg-gradient-to-br from-careem-dark to-[#003822] text-white border-careem-dark/50 shadow-lg' 
-                  : user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'active' 
+                  : (user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'active') || (user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'pending')
                     ? 'text-gray-400 cursor-not-allowed opacity-50 bg-gray-50 border border-gray-100' 
                     : 'bg-gradient-to-br from-careem-dark/40 to-[#003822]/40 text-gray-700 border-gray-100 hover:from-careem-dark/55 hover:to-[#003822]/55 hover:shadow-md'
                 }`}
@@ -2373,10 +2531,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
               {user.role === UserRole.EXECUTOR && (
                 <button
                   onClick={handleGoToSubscription}
-                  disabled={user.subscriptionStatus === 'active'}
+                  disabled={user.subscriptionStatus === 'active' || user.subscriptionStatus === 'pending'}
                   className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition ${activeTab === 'subscription'
                       ? 'bg-gradient-to-br from-careem-dark to-[#003822] text-white border border-careem-dark/50 shadow-lg'
-                      : user.subscriptionStatus === 'active'
+                      : user.subscriptionStatus === 'active' || user.subscriptionStatus === 'pending'
                         ? 'text-gray-400 cursor-not-allowed opacity-50 bg-gray-50 border border-gray-100'
                         : 'bg-gradient-to-br from-careem-dark/40 to-[#003822]/40 text-gray-700 border border-gray-100 hover:from-careem-dark/55 hover:to-[#003822]/55 hover:shadow-md'
                     }`}
@@ -2527,6 +2685,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
         {/* Content Area */}
         <div className="flex-grow">
           {activeTab === 'orders' && (
+            user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'pending' ? (
+              <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 text-center shadow-lg border border-gray-100 dark:border-gray-700 animate-in fade-in duration-300">
+                <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <i className="fas fa-clock text-3xl animate-pulse"></i>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Ожидание подтверждения</h3>
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs font-bold uppercase tracking-wider rounded-full mb-6">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                  Запрос отправлен
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-8 max-w-md mx-auto leading-relaxed">
+                  Ваш запрос на подписку успешно отправлен.<br/>
+                  Пожалуйста, ожидайте решения заказчика. Как только он подтвердит запрос, вам откроется доступ к работе.
+                </p>
+                
+                <button
+                  onClick={handleCancelRequest}
+                  className="bg-red-50 text-red-600 hover:bg-red-100 font-bold py-3 px-8 rounded-xl transition border border-red-100"
+                >
+                  Отменить запрос
+                </button>
+              </div>
+            ) :
             !isProfileReadyForWork && user.role === UserRole.EXECUTOR ? (
               <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-8 text-center animate-in fade-in duration-300">
                 <div className="w-20 h-20 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -2596,7 +2777,36 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 </button>
               )}
 
-              {user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'pending' ? (
+              {user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'rejected' ? (
+                <div className="bg-white p-12 rounded-3xl border border-red-100 text-center shadow-lg animate-in fade-in slide-in-from-bottom-4 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-400 to-red-600"></div>
+                  
+                  <div className="w-24 h-24 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm relative z-10">
+                    <i className="fas fa-times-circle text-4xl text-red-500"></i>
+                  </div>
+                  <h3 className="text-2xl font-black text-gray-900 mb-3 relative z-10">Отказано в подписке</h3>
+                  <p className="text-gray-500 max-w-md mx-auto mb-8 relative z-10 leading-relaxed">
+                    Ожидание подтверждения, что заказчик отказал в подписке.
+                  </p>
+
+                  <div className="relative z-10">
+                     <button
+                        onClick={async () => {
+                           const updatedMe = { ...user, subscriptionStatus: 'none' as const };
+                           updateUser(updatedMe);
+                           const supabase = getSupabase();
+                           if (supabase) {
+                             const col = await resolveProfileIdColumn(supabase);
+                             await supabase.from('profiles').update({ subscription_status: 'none' }).eq(col, user.id);
+                           }
+                        }} 
+                        className="bg-gray-900 text-white font-bold py-3 px-8 rounded-xl hover:bg-gray-800 transition shadow-lg inline-flex items-center gap-2"
+                     >
+                        <i className="fas fa-check"></i> Подтвердить
+                     </button>
+                  </div>
+                </div>
+              ) : user.role === UserRole.EXECUTOR && user.subscriptionStatus === 'pending' ? (
                 <div className="bg-white p-12 rounded-3xl border border-yellow-100 text-center shadow-lg animate-in fade-in slide-in-from-bottom-4 relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-400 to-yellow-600"></div>
                   <div className="absolute -top-10 -right-10 w-32 h-32 bg-yellow-50 rounded-full blur-2xl opacity-50 pointer-events-none"></div>
@@ -2789,17 +2999,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                           <div className="absolute top-0 right-0 w-32 h-32 bg-green-400/20 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
                           <div className="absolute bottom-0 left-0 w-24 h-24 bg-careem-accent/10 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none"></div>
                           <i className="fas fa-hand-holding-heart absolute -bottom-6 -right-6 text-[9rem] opacity-5 transform rotate-12 group-hover:rotate-0 group-hover:scale-110 transition duration-700 ease-out pointer-events-none"></i>
-                          {getServiceHeaderImageUrl(order.serviceType) && (
+                          {(() => {
+                          const info = getServiceHeaderInfo(order.serviceType);
+                          return info && (
                             <div
-                              className="absolute inset-x-0 top-0 h-28 pointer-events-none"
+                              className="absolute inset-x-0 top-0 h-32 pointer-events-none"
                               style={{
-                                backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${getServiceHeaderImageUrl(order.serviceType)})`,
+                                backgroundColor: info.color,
+                                backgroundImage: `url(${info.image})`,
                                 backgroundSize: 'cover',
                                 backgroundPosition: 'center',
-                                backgroundRepeat: 'no-repeat'
+                                maskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
+                                WebkitMaskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
+                                filter: 'brightness(0.8)'
                               }}
                             />
-                          )}
+                          );
+                        })()}
                         <div className="relative z-10">
 
                         {/* Header: Status + Icon + Type + Date */}
@@ -2820,8 +3036,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                               <i className="fas fa-hand-holding-heart text-2xl"></i>
                             </div>
                             <div>
-                              <h4 className="font-extrabold text-slate-100 text-lg leading-tight">{order.serviceType}</h4>
-                              <p className="text-xs font-medium text-slate-400 mt-1 flex items-center gap-2">
+                              <h4 className="font-extrabold text-slate-100 text-lg leading-tight drop-shadow-md">{order.serviceType}</h4>
+                              <p className="text-xs font-medium text-slate-400 mt-1 flex items-center gap-2 drop-shadow-sm">
                                 <span className="bg-white/5 px-2 py-0.5 rounded border border-white/10 text-slate-300">{order.date}</span>
                                 <span className="text-slate-300">{order.time}</span>
                               </p>
@@ -3620,10 +3836,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                            <div key={order.id} className="bg-[#13213A] rounded-2xl shadow-lg border border-[#1B2D4F] relative overflow-hidden group hover:border-careem-primary/30 transition">
                               <div 
                                 onClick={() => {
-                                  const newExpanded = new Set(expandedHistoryItems);
-                                  if (newExpanded.has(order.id)) {
-                                    newExpanded.delete(order.id);
-                                  } else {
+                                  // Accordion behavior: toggle current, close others
+                                  const newExpanded = new Set<string>();
+                                  if (!expandedHistoryItems.has(order.id)) {
                                     newExpanded.add(order.id);
                                   }
                                   setExpandedHistoryItems(newExpanded);
@@ -3661,14 +3876,37 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                         )}
 
                                         {/* Who cancelled info if available */}
-                                        {order.status === OrderStatus.CANCELLED && order.rejectionReason && (
+                                        {order.status === OrderStatus.CANCELLED && order.rejectionReason && order.serviceType !== 'Подписка' && (
                                             <div className="bg-red-500/10 rounded-xl p-3 mb-4 text-sm text-red-300 border border-red-500/20">
                                                <span className="font-bold">Причина отмены:</span> {order.rejectionReason}
                                             </div>
                                         )}
+
+                                        {/* Rating & Review */}
+                                        {order.status === OrderStatus.COMPLETED && order.rating && (
+                                            <div className="bg-yellow-500/10 rounded-xl p-3 mb-4 border border-yellow-500/20">
+                                               <div className="flex items-center gap-1 mb-2">
+                                                  {[1, 2, 3, 4, 5].map((star) => (
+                                                     <i 
+                                                       key={star} 
+                                                       className={`fas fa-star text-sm ${star <= (order.rating || 0) ? 'text-yellow-400' : 'text-slate-600'}`}
+                                                     ></i>
+                                                  ))}
+                                                  <span className="text-xs text-slate-400 ml-2 font-medium">
+                                                     {order.rating}/5
+                                                  </span>
+                                               </div>
+                                               {order.review && (
+                                                  <p className="text-sm text-slate-300 italic">
+                                                     "{order.review}"
+                                                  </p>
+                                               )}
+                                            </div>
+                                        )}
                                         
-                                        {/* Counterpart Info */}
-                                        <div className="flex items-center gap-3 pt-4 border-t border-white/10">
+                                        {/* Counterpart Info & Delete Action */}
+                                        <div className="flex items-center justify-between pt-4 border-t border-white/10">
+                                           <div className="flex items-center gap-3">
                                            {(() => {
                                               const counterpartId = user.role === UserRole.CUSTOMER ? order.executorId : order.customerId;
                                               const counterpart = allUsers.find(u => u.id === counterpartId);
@@ -3686,6 +3924,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                                  </>
                                               );
                                            })()}
+                                           </div>
+
+                                           <button 
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (window.confirm('Вы уверены, что хотите удалить этот заказ из истории?')) {
+                                                  handleDeleteOrder(order.id);
+                                                }
+                                              }}
+                                              className="text-slate-500 hover:text-red-400 transition text-xs font-bold flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-red-500/10"
+                                              title="Удалить из истории"
+                                           >
+                                              <i className="fas fa-trash-alt"></i> Удалить
+                                           </button>
                                         </div>
                                     </div>
                                 </div>
@@ -3754,6 +4006,42 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
           )}
         </div>
       </div>
+      {/* Subscription Rejection Confirmation Modal */}
+      {rejectSubscriptionId && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4 modal-open">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Отклонить запрос?</h3>
+            <p className="text-gray-600 mb-6">Вы уверены, что хотите отказать в подписке?</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setRejectSubscriptionId(null)}
+                className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={async () => {
+                   if (rejectSubscriptionId) {
+                     await handleRejectSubscription(rejectSubscriptionId);
+                     const pendingOrder = orders.find(o => 
+                       o.status === OrderStatus.PENDING && 
+                       o.executorId === rejectSubscriptionId
+                     );
+                     if (pendingOrder) {
+                       await handleDeleteOrder(pendingOrder.id);
+                     }
+                     setRejectSubscriptionId(null);
+                   }
+                }}
+                className="flex-1 py-3 px-4 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition shadow-lg shadow-red-500/30"
+              >
+                Подтвердить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Profile Modal */}
       {isDeleteModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4 modal-open">

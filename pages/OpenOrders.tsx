@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { User, UserRole, Order, OrderStatus } from '../types';
+import { SERVICE_TYPES } from '../constants';
 import OrderMap from '../components/OrderMap';
 import { createClient } from '@supabase/supabase-js';
 
@@ -64,19 +65,10 @@ const formatAddress = (address?: string) => {
     .replace(/Россия, /, '');
 };
 
-const getServiceHeaderImageUrl = (serviceType: string): string | null => {
-  switch (serviceType) {
-    case 'Транспортировка на авто':
-      return 'https://img.freepik.com/premium-vector/woman-with-disability-getting-into-her-car-flat-design-illustration_218660-1010.jpg?semt=ais_hybrid&w=740';
-    case 'Помощь по дому':
-      return 'https://www.yolo.mn/img/images/ck/2021/03/31/image_01-011234-110456899.jpeg';
-    case 'Поход в магазин/аптеку':
-      return 'https://static.vecteezy.com/system/resources/previews/036/179/234/large_2x/pharmacist-and-patient-pharmacist-consultant-and-patient-in-drugstore-interior-client-buys-medication-pharma-healthcare-concept-vector.jpg';
-    case 'Прогулка и сопровождение':
-      return 'https://img.freepik.com/premium-vector/woman-help-man-with-broken-leg-in-plaster-cast-on-wheelchair-to-relax-in-public-park_251139-777.jpg';
-    default:
-      return null;
-  }
+const getServiceHeaderInfo = (serviceType: string) => {
+  const service = SERVICE_TYPES.find(st => st.name === serviceType);
+  if (!service || !service.headerImage) return null;
+  return { image: service.headerImage, color: service.headerColor || 'transparent' };
 };
 
 const OpenOrders: React.FC = () => {
@@ -360,23 +352,29 @@ const OpenOrders: React.FC = () => {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-green-400/20 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
                 <div className="absolute bottom-0 left-0 w-24 h-24 bg-careem-accent/10 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none"></div>
                 <i className="fas fa-hand-holding-heart absolute -bottom-6 -right-6 text-[9rem] opacity-5 transform rotate-12 group-hover:rotate-0 group-hover:scale-110 transition duration-700 ease-out pointer-events-none"></i>
-                {getServiceHeaderImageUrl(order.serviceType) && (
-                  <div
-                    className="absolute inset-x-0 top-0 h-28 pointer-events-none"
-                    style={{
-                      backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${getServiceHeaderImageUrl(order.serviceType)})`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
-                      backgroundRepeat: 'no-repeat'
-                    }}
-                  />
-                )}
+                {(() => {
+                  const info = getServiceHeaderInfo(order.serviceType);
+                  return info && (
+                    <div
+                      className="absolute inset-x-0 top-0 h-32 pointer-events-none"
+                      style={{
+                        backgroundColor: info.color,
+                        backgroundImage: `url(${info.image})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        maskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
+                        WebkitMaskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
+                        filter: 'brightness(0.8)'
+                      }}
+                    />
+                  );
+                })()}
                 <div className="p-5 relative z-10">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Заказ: ({order.id.split('-')[0]})</div>
-                      <div className="mt-1 text-lg font-extrabold text-slate-100 truncate">{order.serviceType}</div>
-                      <div className="mt-2 flex flex-col items-start sm:flex-row sm:flex-wrap sm:items-center gap-2 text-xs text-slate-300">
+                      <div className="text-[11px] uppercase tracking-wider text-slate-400 font-bold drop-shadow-md">Заказ: ({order.id.split('-')[0]})</div>
+                      <div className="mt-1 text-lg font-extrabold text-slate-100 truncate drop-shadow-md">{order.serviceType}</div>
+                      <div className="mt-2 flex flex-col items-start sm:flex-row sm:flex-wrap sm:items-center gap-2 text-xs text-slate-300 drop-shadow-sm">
                         {order.date && (
                           <span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5">
                             <i className="fas fa-calendar-alt text-slate-400"></i>

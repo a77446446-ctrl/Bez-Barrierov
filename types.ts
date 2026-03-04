@@ -44,7 +44,7 @@ export interface User {
     enabled: boolean;
   }[];
   // Subscription fields
-  subscriptionStatus?: 'none' | 'pending' | 'active' | 'expired';
+  subscriptionStatus?: 'none' | 'pending' | 'active' | 'expired' | 'rejected';
   subscriptionStartDate?: string; // ISO date
   subscriptionEndDate?: string; // ISO date
   subscribedToCustomerId?: string; // For Executor
@@ -66,6 +66,8 @@ export interface ServiceType {
   id: string;
   name: string;
   pricePerHour: number;
+  headerImage?: string;
+  headerColor?: string;
 }
 
 export interface Order {

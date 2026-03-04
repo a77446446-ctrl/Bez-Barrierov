@@ -3,10 +3,34 @@ import React from 'react';
 import { User, UserRole, ServiceType, Order, OrderStatus } from './types';
 
 export const SERVICE_TYPES: ServiceType[] = [
-  { id: '1', name: 'Прогулка и сопровождение', pricePerHour: 500 },
-  { id: '2', name: 'Поход в магазин/аптеку', pricePerHour: 400 },
-  { id: '3', name: 'Транспортировка на авто', pricePerHour: 1000 },
-  { id: '4', name: 'Помощь по дому', pricePerHour: 600 },
+  { 
+    id: '1', 
+    name: 'Прогулка и сопровождение', 
+    pricePerHour: 500,
+    headerImage: 'https://static.vecteezy.com/system/resources/previews/008/296/398/non_2x/outdoor-activity-people-walking-in-the-city-park-mom-with-a-baby-carriage-woman-in-wheelchair-with-an-accompanying-person-young-man-urban-recreation-concept-diversity-concept-vector.jpg',
+    headerColor: '#FFFFFF'
+  },
+  { 
+    id: '2', 
+    name: 'Поход в магазин/аптеку', 
+    pricePerHour: 400,
+    headerImage: 'https://cdn.vectorstock.com/i/500p/50/68/smiling-male-pharmacist-consulting-female-customer-vector-32265068.jpg',
+    headerColor: '#FFFFFF'
+  },
+  { 
+    id: '3', 
+    name: 'Транспортировка на авто', 
+    pricePerHour: 1000,
+    headerImage: 'https://img.freepik.com/premium-vector/woman-with-disability-getting-into-her-car-flat-design-illustration_218660-1010.jpg?semt=ais_hybrid&w=740',
+    headerColor: '#FFFFFF'
+  },
+  { 
+    id: '4', 
+    name: 'Помощь по дому', 
+    pricePerHour: 600,
+    headerImage: 'https://static.vecteezy.com/system/resources/thumbnails/009/361/497/small_2x/flat-cartoon-character-surfing-internet-illustration-concept-vector.jpg',
+    headerColor: '#FFFFFF'
+  },
 ];
 
 export const MOCK_USERS: User[] = [
