@@ -76,6 +76,7 @@ const OpenOrders: React.FC = () => {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [hasActiveOrder, setHasActiveOrder] = useState(false);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(true);
 
   const [allUsers, setAllUsers] = useState<User[]>([]);
 
@@ -140,7 +141,10 @@ const OpenOrders: React.FC = () => {
 
   useEffect(() => {
     const supabase = getSupabase();
-    if (!supabase) return;
+    if (!supabase) {
+      setIsLoadingOrders(false);
+      return;
+    }
     let isActive = true;
     let stopPolling = false;
 
@@ -152,6 +156,7 @@ const OpenOrders: React.FC = () => {
       if (user?.subscriptionStatus === 'pending' || user?.subscriptionStatus === 'active') {
         setHasActiveOrder(true); // Treat as "active" to show the status message instead of "No orders"
         setOrders([]);
+        setIsLoadingOrders(false);
         return;
       }
 
@@ -171,6 +176,7 @@ const OpenOrders: React.FC = () => {
       if (activeOrders && activeOrders.length > 0) {
         setHasActiveOrder(true);
         setOrders([]);
+        setIsLoadingOrders(false);
         return;
       } else {
         setHasActiveOrder(false);
@@ -211,6 +217,7 @@ const OpenOrders: React.FC = () => {
         return;
       }
       setAllUsers(data.map(profileRowToUser));
+      setIsLoadingOrders(false);
       } catch (err: any) {
         const isAbort = err.name === 'AbortError' || 
                        (err.message && err.message.includes('AbortError')) ||
@@ -223,6 +230,7 @@ const OpenOrders: React.FC = () => {
           setOrders([]);
           setAllUsers([]);
           setHasActiveOrder(false);
+          setIsLoadingOrders(false);
         }
       }
     };
@@ -336,10 +344,20 @@ const OpenOrders: React.FC = () => {
           </div>
         </div>
       ) : openOrders.length === 0 ? (
-        <div className="rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl p-8 text-center">
-          <h2 className="text-lg font-bold text-slate-100">Свободных заказов нет</h2>
-          <p className="text-sm text-slate-400 mt-2">Проверьте позже — новые заказы появляются автоматически.</p>
-        </div>
+        isLoadingOrders ? (
+          <div className="rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl p-8 text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-careem-primary shadow-lg">
+              <i className="fas fa-spinner text-white text-xl animate-spin"></i>
+            </div>
+            <h2 className="mt-4 text-lg font-bold text-slate-100">Подождите немного — идёт обновление заказов</h2>
+            <p className="text-sm text-slate-400 mt-2">Лента синхронизируется автоматически в реальном времени.</p>
+          </div>
+        ) : (
+          <div className="rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl p-8 text-center">
+            <h2 className="text-lg font-bold text-slate-100">Свободных заказов нет</h2>
+            <p className="text-sm text-slate-400 mt-2">Проверьте позже — новые заказы появляются автоматически.</p>
+          </div>
+        )
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {openOrders.map((order) => {
