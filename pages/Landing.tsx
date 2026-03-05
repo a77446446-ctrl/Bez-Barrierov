@@ -191,7 +191,7 @@ const Landing: React.FC<LandingProps> = ({ onViewProfile, onBook }) => {
           <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[#2D6BFF] to-[#1A3FA8] flex items-center justify-center shadow-lg shadow-[#2D6BFF]/20">
-                <i className="fas fa-square text-white text-xs"></i>
+                <i className="fas fa-universal-access text-white text-xs"></i>
               </div>
               <div className="font-semibold tracking-tight text-slate-100">БезБарьеров</div>
             </div>

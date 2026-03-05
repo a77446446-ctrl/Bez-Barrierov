@@ -134,7 +134,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <div className="px-4 py-4 flex items-center justify-between gap-3">
                   <Link to="/" className="flex items-center gap-3 min-w-0">
                     <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-[#2D6BFF] to-[#1A3FA8] flex items-center justify-center shadow-lg shadow-[#2D6BFF]/20 shrink-0">
-                      <i className="fas fa-square text-white text-sm"></i>
+                      <i className="fas fa-universal-access text-white text-sm"></i>
                     </div>
                     <div className="font-semibold tracking-tight truncate">БезБарьеров</div>
                   </Link>
@@ -162,7 +162,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="px-5 py-6">
               <Link to="/" className="flex items-center gap-3">
                 <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-[#2D6BFF] to-[#1A3FA8] flex items-center justify-center shadow-lg shadow-[#2D6BFF]/20">
-                  <i className="fas fa-square text-white text-sm"></i>
+                  <i className="fas fa-universal-access text-white text-sm"></i>
                 </div>
                 <div className="font-semibold tracking-tight">БезБарьеров</div>
               </Link>

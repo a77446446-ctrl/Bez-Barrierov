@@ -204,7 +204,7 @@ const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
             <i className="fas fa-arrow-left"></i>
           </button>
           <div className="w-14 h-14 rounded-2xl bg-careem-primary mx-auto flex items-center justify-center shadow-lg shadow-[#2D6BFF]/20">
-            <i className="fas fa-shield-halved text-white text-xl"></i>
+            <i className="fas fa-universal-access text-white text-xl"></i>
           </div>
           <h2 className="mt-6 text-3xl font-extrabold tracking-tight text-slate-100">
             {isReset ? 'Новый пароль' : (isLogin ? 'С возвращением' : 'Новый аккаунт')}
