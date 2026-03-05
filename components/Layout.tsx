@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { UserRole, Order, OrderStatus } from '../types';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabase } from '../services/supabaseClient';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -32,18 +32,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   useEffect(() => {
     if (user?.role === UserRole.EXECUTOR) {
-      const getSupabase = () => {
-        const url = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
-        const key = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined;
-        if (!url || !key) return null;
-        return createClient(url, key, {
-          auth: {
-            persistSession: true,
-            autoRefreshToken: true,
-            detectSessionInUrl: true
-          }
-        });
-      };
 
       const checkOrders = async (signal?: AbortSignal) => {
         const supabase = getSupabase();
@@ -68,10 +56,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
           setOpenOrdersCount((openCount || 0) + (mineCount || 0));
         } catch (error: any) {
-          const isAbort = error.name === 'AbortError' || 
-                         (error.message && error.message.includes('AbortError')) ||
-                         (error.details && error.details.includes('AbortError'));
-                         
+          const isAbort = error.name === 'AbortError' ||
+            (error.message && error.message.includes('AbortError')) ||
+            (error.details && error.details.includes('AbortError'));
+
           if (!isAbort) {
             console.error('Error checking orders:', error);
           }
@@ -79,14 +67,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       };
 
       const controller = new AbortController();
-      
+
       // Debounce initial call to avoid React Strict Mode double-invocation in dev
       const timeoutId = setTimeout(() => {
         void checkOrders(controller.signal);
       }, 500);
 
       const interval = setInterval(() => void checkOrders(controller.signal), 15000);
-      
+
       return () => {
         clearTimeout(timeoutId);
         clearInterval(interval);
@@ -123,25 +111,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#050913] via-[#070B14] to-[#04060D] text-slate-100 overflow-x-hidden">
+    <div className="min-h-screen bg-careem-dark text-slate-100 overflow-x-hidden selection:bg-careem-primary/30">
       <div
         className={`min-h-screen ${isAuthPage ? 'flex items-center justify-center px-4 py-12' : showSidebar ? 'flex flex-col md:flex-row' : 'flex flex-col'}`}
       >
         {showSidebar && (
           <>
             {!isGlobalModalOpen && (
-              <header className="md:hidden sticky top-0 z-[150] border-b border-white/5 bg-[#0B1220]/85 backdrop-blur-xl">
-                <div className="px-4 py-4 flex items-center justify-between gap-3">
-                  <Link to="/" className="flex items-center gap-3 min-w-0">
-                    <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-[#2D6BFF] to-[#1A3FA8] flex items-center justify-center shadow-lg shadow-[#2D6BFF]/20 shrink-0">
-                      <i className="fas fa-universal-access text-white text-sm"></i>
+              <header className="md:hidden sticky top-0 z-[150] border-b border-white/5 bg-careem-dark/60 backdrop-blur-2xl saturate-150">
+                <div className="px-5 py-4 flex items-center justify-between gap-3">
+                  <Link to="/" className="flex items-center gap-3 min-w-0 group">
+                    <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-careem-accent to-careem-primary flex items-center justify-center shadow-lg shadow-careem-primary/20 shrink-0 group-hover:scale-105 transition-transform duration-300">
+                      <i className="fas fa-universal-access text-white text-[15px]"></i>
                     </div>
-                    <div className="font-semibold tracking-tight truncate">БезБарьеров</div>
+                    <div className="font-display font-bold text-lg tracking-tight truncate text-white">БезБарьеров</div>
                   </Link>
                   {user ? (
                     <button
                       onClick={handleLogout}
-                      className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition flex items-center justify-center text-slate-200 shrink-0"
+                      className="h-10 w-10 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition flex items-center justify-center text-slate-300 shrink-0"
                       title="Выйти"
                     >
                       <i className="fas fa-arrow-right-from-bracket text-sm"></i>
@@ -149,7 +137,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   ) : (
                     <Link
                       to="/auth"
-                      className="inline-flex items-center justify-center rounded-xl bg-[#2D6BFF] hover:bg-[#255EE6] transition text-white font-semibold px-4 py-2 shadow-lg shadow-[#2D6BFF]/20 shrink-0"
+                      className="inline-flex items-center justify-center rounded-2xl bg-careem-primary hover:bg-careem-accent transition text-white font-medium px-5 py-2.5 shadow-[0_0_20px_rgba(37,99,235,0.3)] inset-2 shrink-0 text-sm"
                     >
                       Войти
                     </Link>
@@ -158,110 +146,119 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </header>
             )}
 
-            <aside className="hidden md:flex md:flex-col w-[260px] shrink-0 border-r border-white/5 bg-[#0B1220]/85 backdrop-blur-xl">
-            <div className="px-5 py-6">
-              <Link to="/" className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-[#2D6BFF] to-[#1A3FA8] flex items-center justify-center shadow-lg shadow-[#2D6BFF]/20">
-                  <i className="fas fa-universal-access text-white text-sm"></i>
-                </div>
-                <div className="font-semibold tracking-tight">БезБарьеров</div>
-              </Link>
-            </div>
+            <aside className="hidden md:flex md:flex-col w-[280px] shrink-0 border-r border-white/5 bg-careem-dark/40 backdrop-blur-2xl relative">
+              <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none"></div>
+              
+              <div className="px-6 py-8 relative z-10">
+                <Link to="/" className="flex items-center gap-3.5 group">
+                  <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-careem-accent to-careem-primary flex items-center justify-center shadow-lg shadow-careem-primary/20 group-hover:scale-105 transition-transform duration-300">
+                    <i className="fas fa-universal-access text-white text-[17px]"></i>
+                  </div>
+                  <div className="font-display font-bold text-xl tracking-tight text-white">БезБарьеров</div>
+                </Link>
+              </div>
 
-            <nav className="px-3">
-              <div className="space-y-1">
+              <nav className="px-4 relative z-10">
+                <div className="space-y-1.5">
+                  {navItems.map((item) => (
+                    <Link
+                      key={item.label}
+                      to={item.to}
+                      className={[
+                        'flex items-center gap-3.5 rounded-2xl px-4 py-3.5 text-[15px] transition-all duration-200 relative overflow-hidden group',
+                        item.isActive
+                          ? 'text-white'
+                          : 'text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04]'
+                      ].join(' ')}
+                    >
+                      {item.isActive && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-careem-primary/20 to-transparent border-l-2 border-careem-primary"></div>
+                      )}
+                      
+                      <i className={`fas ${item.icon} z-10 text-[16px] transition-colors ${item.isActive ? 'text-careem-primary drop-shadow-[0_0_8px_rgba(37,99,235,0.6)]' : 'text-zinc-500 group-hover:text-zinc-400'}`}></i>
+                      <span className="z-10 font-medium">{item.label}</span>
+                      {item.label === 'Настройки' &&
+                        user?.role === UserRole.EXECUTOR &&
+                        user.subscriptionStatus !== 'active' &&
+                        openOrdersCount > 0 && (
+                          <span className="ml-auto h-2 w-2 rounded-full bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.15)]" />
+                        )}
+                    </Link>
+                  ))}
+                </div>
+              </nav>
+
+              <div className="mt-auto px-4 pb-6 pt-6 relative z-10">
+                {user ? (
+                  <div className="rounded-3xl border border-white/5 bg-careem-light/40 backdrop-blur-md p-4 shadow-[0_4px_24px_rgba(0,0,0,0.2)]">
+                    <div className="flex items-center gap-3.5">
+                      <div className="h-11 w-11 rounded-full overflow-hidden bg-white/10 ring-2 ring-white/5 shrink-0 shadow-inner">
+                        {user.avatar ? (
+                          <img src={user.avatar} alt={user.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center text-zinc-400 bg-zinc-800">
+                            <i className="fas fa-user mb-1"></i>
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[15px] font-semibold text-white truncate font-display">{user.name}</div>
+                        <div className="text-[13px] text-zinc-400 truncate">
+                          {user.role === UserRole.ADMIN
+                            ? 'Администратор'
+                            : user.role === UserRole.EXECUTOR
+                              ? 'Помощник'
+                              : 'Заказчик'}
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleLogout}
+                        className="h-10 w-10 flex shrink-0 rounded-full hover:bg-white/10 transition items-center justify-center text-zinc-400 hover:text-white group"
+                        title="Выйти"
+                      >
+                        <i className="fas fa-arrow-right-from-bracket text-sm group-hover:translate-x-0.5 transition-transform"></i>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <Link
+                    to="/auth"
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-careem-primary/10 hover:bg-careem-primary/20 border border-careem-primary/20 transition text-careem-primary font-medium py-3.5 shadow-lg"
+                  >
+                    Войти в систему
+                  </Link>
+                )}
+              </div>
+            </aside>
+
+            <nav className="md:hidden fixed bottom-0 inset-x-0 z-[160] border-t border-white/5 bg-careem-dark/70 backdrop-blur-2xl saturate-150 pb-safe">
+              <div className="px-3 py-2 grid grid-cols-2 gap-2 w-full max-w-md mx-auto relative">
                 {navItems.map((item) => (
                   <Link
                     key={item.label}
                     to={item.to}
                     className={[
-                      'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition',
+                      'flex flex-col items-center justify-center gap-1.5 rounded-2xl px-2 py-2.5 text-[11px] font-medium transition-all relative',
                       item.isActive
-                        ? 'bg-[#13213A] text-white border border-[#1B2D4F] shadow-sm'
-                        : 'text-slate-400 hover:text-slate-100 hover:bg-white/5 border border-transparent'
+                        ? 'text-careem-primary'
+                        : 'text-zinc-500 hover:text-zinc-300'
                     ].join(' ')}
                   >
-                    <i className={`fas ${item.icon} text-[14px] ${item.isActive ? 'text-[#2D6BFF]' : 'text-slate-500'}`}></i>
-                    <span>{item.label}</span>
+                    {item.isActive && (
+                      <div className="absolute inset-0 bg-careem-primary/10 rounded-2xl"></div>
+                    )}
+                    <i className={`fas ${item.icon} text-[20px] mb-0.5 z-10 transition-transform ${item.isActive ? 'drop-shadow-[0_0_8px_rgba(37,99,235,0.6)] scale-110' : ''}`}></i>
+                    <span className="whitespace-nowrap z-10 tracking-wide">{item.label}</span>
                     {item.label === 'Настройки' &&
                       user?.role === UserRole.EXECUTOR &&
                       user.subscriptionStatus !== 'active' &&
                       openOrdersCount > 0 && (
-                        <span className="ml-auto h-2 w-2 rounded-full bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.15)]" />
+                        <span className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.15)]" />
                       )}
                   </Link>
                 ))}
               </div>
             </nav>
-
-            <div className="mt-auto px-5 pb-6 pt-6">
-              {user ? (
-                <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl overflow-hidden bg-white/10 border border-white/10 shrink-0">
-                      {user.avatar ? (
-                        <img src={user.avatar} alt={user.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="h-full w-full flex items-center justify-center text-slate-300">
-                          <i className="fas fa-user"></i>
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold truncate">{user.name}</div>
-                      <div className="text-xs text-slate-400 truncate">
-                        {user.role === UserRole.ADMIN
-                          ? 'Администратор'
-                          : user.role === UserRole.EXECUTOR
-                            ? 'Помощник'
-                            : 'Заказчик'}
-                      </div>
-                    </div>
-                    <button
-                      onClick={handleLogout}
-                      className="ml-auto h-10 w-10 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition flex items-center justify-center text-slate-200"
-                      title="Выйти"
-                    >
-                      <i className="fas fa-arrow-right-from-bracket text-sm"></i>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <Link
-                  to="/auth"
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#2D6BFF]/80 hover:bg-[#255EE6] transition text-white font-semibold py-3 shadow-lg shadow-[#2D6BFF]/20"
-                >
-                  Войти в систему
-                </Link>
-              )}
-            </div>
-          </aside>
-
-          <nav className="md:hidden fixed bottom-0 inset-x-0 z-[160] border-t border-white/5 bg-[#0B1220]/90 backdrop-blur-xl">
-            <div className="px-4 py-3 grid grid-cols-2 gap-2 w-full">
-              {navItems.map((item) => (
-                <Link
-                  key={item.label}
-                  to={item.to}
-                  className={[
-                    'flex items-center justify-center gap-2 rounded-xl px-2 py-3 text-sm font-medium transition border',
-                    item.isActive
-                      ? 'bg-[#13213A] text-white border-[#1B2D4F]'
-                      : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white'
-                  ].join(' ')}
-                >
-                  <i className={`fas ${item.icon} text-[14px] ${item.isActive ? 'text-[#2D6BFF]' : 'text-slate-500'}`}></i>
-                  <span className="whitespace-nowrap">{item.label}</span>
-                  {item.label === 'Настройки' &&
-                    user?.role === UserRole.EXECUTOR &&
-                    user.subscriptionStatus !== 'active' &&
-                    openOrdersCount > 0 && (
-                      <span className="h-2 w-2 rounded-full bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.15)]" />
-                    )}
-                </Link>
-              ))}
-            </div>
-          </nav>
           </>
         )}
 

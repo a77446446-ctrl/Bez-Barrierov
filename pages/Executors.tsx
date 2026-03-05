@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { User, UserRole, OrderStatus } from '../types';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabase } from '../services/supabaseClient';
+import { profileRowToUser } from '../services/mappers';
 
 const Executors: React.FC = () => {
   const { user } = useAuth();
@@ -18,7 +19,7 @@ const Executors: React.FC = () => {
     const fetchRealRatings = async () => {
       const supabase = getSupabase();
       if (!supabase) return;
-      
+
       const { data } = await supabase
         .from('orders')
         .select('executor_id, rating')
@@ -43,51 +44,11 @@ const Executors: React.FC = () => {
         setRealRatings(averages);
       }
     };
-    
+
     fetchRealRatings();
   }, []);
 
-  const getSupabase = () => {
-    const url = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
-    const key = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined;
-    if (!url || !key) return null;
-    return createClient(url, key, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-      }
-    });
-  };
 
-  const profileRowToUser = (row: any): User => {
-    return {
-      id: row.id ?? row.user_id ?? row.userId,
-      role: row.role,
-      name: row.name || '',
-      email: row.email || '',
-      phone: row.phone || '',
-      telegramId: row.telegram_id ?? row.telegramId,
-      avatar: row.avatar ?? row.avatar_url,
-      rating: row.rating ?? undefined,
-      reviewsCount: row.reviews_count ?? row.reviewsCount,
-      reviews: row.reviews ?? undefined,
-      location: row.location ?? undefined,
-      locationCoordinates: row.location_coordinates ?? row.locationCoordinates,
-      coverageRadius: row.coverage_radius ?? row.coverageRadius,
-      description: row.description ?? undefined,
-      profileVerificationStatus: row.profile_verification_status ?? row.profileVerificationStatus,
-      vehiclePhoto: row.vehicle_photo ?? row.vehiclePhoto,
-      customServices: row.custom_services ?? row.customServices,
-      subscriptionStatus: row.subscription_status ?? row.subscriptionStatus,
-      subscriptionStartDate: row.subscription_start_date ?? row.subscriptionStartDate,
-      subscriptionEndDate: row.subscription_end_date ?? row.subscriptionEndDate,
-      subscribedToCustomerId: row.subscribed_to_customer_id ?? row.subscribedToCustomerId,
-      subscriptionRequestToCustomerId: row.subscription_request_to_customer_id ?? row.subscriptionRequestToCustomerId,
-      subscribedExecutorId: row.subscribed_executor_id ?? row.subscribedExecutorId,
-      notifications: row.notifications ?? undefined
-    };
-  };
 
   useEffect(() => {
     if (!user) {
@@ -98,10 +59,10 @@ const Executors: React.FC = () => {
       navigate('/dashboard');
       return;
     }
-    
+
     let isActive = true;
     const supabase = getSupabase();
-    
+
     // Initial loading only
     setIsLoading(true);
 
@@ -119,7 +80,7 @@ const Executors: React.FC = () => {
           .neq('subscription_status', 'active')
           .eq('profile_verification_status', 'verified')
           .order('created_at', { ascending: true });
-        
+
         if (!isActive) return;
 
         // Fetch busy executors (those with active CONFIRMED orders)
@@ -127,9 +88,9 @@ const Executors: React.FC = () => {
           .from('orders')
           .select('executor_id')
           .eq('status', OrderStatus.CONFIRMED);
-          
+
         const busyExecutorIds = new Set(busyOrders?.map((o: any) => o.executor_id).filter(Boolean) || []);
-        
+
         if (error || !Array.isArray(data)) {
           setExecutors([]);
         } else {

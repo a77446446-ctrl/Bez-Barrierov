@@ -8,14 +8,15 @@ import { MapContainer, TileLayer, Marker, Popup, useMapEvents, Polyline, useMap 
 import L from 'leaflet';
 import ErrorBoundary from '../components/ErrorBoundary';
 import AddressAutocomplete from '../components/AddressAutocomplete';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabase } from '../services/supabaseClient';
+import { profileRowToUser } from '../services/mappers';
 
 // Fix for default Leaflet markers
 let DefaultIcon = L.icon({
-    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41]
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41]
 });
 
 L.Marker.prototype.options.icon = DefaultIcon;
@@ -42,25 +43,25 @@ const MapController = ({ center }: { center: [number, number] | null }) => {
 };
 
 // Helper component to handle map clicks
-const MapEvents = ({ 
-  serviceId, 
-  activeInput, 
-  setActiveInput, 
-  updateLocation, 
-  setLocationFrom, 
-  setLocationTo, 
-  setGeneralLocation 
+const MapEvents = ({
+  serviceId,
+  activeInput,
+  setActiveInput,
+  updateLocation,
+  setLocationFrom,
+  setLocationTo,
+  setGeneralLocation
 }: any) => {
   useMapEvents({
     click(e) {
       const coords = [e.latlng.lat, e.latlng.lng];
-      
+
       if (serviceId === '3') {
         if (activeInput === 'from') {
-             updateLocation(coords, setLocationFrom);
-             setActiveInput('to');
+          updateLocation(coords, setLocationFrom);
+          setActiveInput('to');
         } else {
-             updateLocation(coords, setLocationTo);
+          updateLocation(coords, setLocationTo);
         }
       } else {
         updateLocation(coords, setGeneralLocation);
@@ -93,48 +94,48 @@ const UnifiedMapPicker = ({
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
 
   // Custom icons
-   const iconA = L.divIcon({
-     className: 'custom-marker-icon marker-a',
-     html: 'A',
-     iconSize: [36, 36],
-     iconAnchor: [18, 18]
-   });
- 
-   const iconB = L.divIcon({
-     className: 'custom-marker-icon marker-b',
-     html: 'B',
-     iconSize: [36, 36],
-     iconAnchor: [18, 18]
-   });
-  
+  const iconA = L.divIcon({
+    className: 'custom-marker-icon marker-a',
+    html: 'A',
+    iconSize: [36, 36],
+    iconAnchor: [18, 18]
+  });
+
+  const iconB = L.divIcon({
+    className: 'custom-marker-icon marker-b',
+    html: 'B',
+    iconSize: [36, 36],
+    iconAnchor: [18, 18]
+  });
+
   // Calculate distance when both points are present
   useEffect(() => {
     if (serviceId === '3' && locationFrom && locationTo) {
-         // OSRM routing
-         fetch(`https://router.project-osrm.org/route/v1/driving/${locationFrom.lng},${locationFrom.lat};${locationTo.lng},${locationTo.lat}?overview=full&geometries=geojson`)
-           .then(res => res.json())
-           .then(data => {
-             if (data.routes && data.routes.length > 0) {
-               const route = data.routes[0];
-               // OSRM returns coordinates as [lon, lat], Leaflet needs [lat, lon]
-               const coordinates = route.geometry.coordinates.map((coord: number[]) => [coord[1], coord[0]]);
-               setRoutePositions(coordinates);
-               setRouteDistance(route.distance / 1000); // distance in meters -> km
-             }
-           })
-           .catch(err => {
-             console.error('Routing error:', err);
-             // Fallback to straight line
-             setRoutePositions([
-               [locationFrom.lat, locationFrom.lng],
-               [locationTo.lat, locationTo.lng]
-             ]);
-             const dist = getDistanceFromLatLonInKm(
-               locationFrom.lat, locationFrom.lng,
-               locationTo.lat, locationTo.lng
-             );
-             setRouteDistance(dist);
-           });
+      // OSRM routing
+      fetch(`https://router.project-osrm.org/route/v1/driving/${locationFrom.lng},${locationFrom.lat};${locationTo.lng},${locationTo.lat}?overview=full&geometries=geojson`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.routes && data.routes.length > 0) {
+            const route = data.routes[0];
+            // OSRM returns coordinates as [lon, lat], Leaflet needs [lat, lon]
+            const coordinates = route.geometry.coordinates.map((coord: number[]) => [coord[1], coord[0]]);
+            setRoutePositions(coordinates);
+            setRouteDistance(route.distance / 1000); // distance in meters -> km
+          }
+        })
+        .catch(err => {
+          console.error('Routing error:', err);
+          // Fallback to straight line
+          setRoutePositions([
+            [locationFrom.lat, locationFrom.lng],
+            [locationTo.lat, locationTo.lng]
+          ]);
+          const dist = getDistanceFromLatLonInKm(
+            locationFrom.lat, locationFrom.lng,
+            locationTo.lat, locationTo.lng
+          );
+          setRouteDistance(dist);
+        });
     } else {
       setRoutePositions([]);
       setRouteDistance(null);
@@ -142,157 +143,157 @@ const UnifiedMapPicker = ({
   }, [locationFrom, locationTo, serviceId]);
 
   const updateLocation = (coords: number[], setter: (loc: Location) => void) => {
-      const [lat, lng] = coords;
-      setter({ lat, lng, address: 'Определение адреса...' });
-      setMapCenter([lat, lng]);
-      
-      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
-        .then(response => response.json())
-        .then(data => {
-            if (data && data.display_name) {
-                setter({ lat, lng, address: data.display_name });
-            } else {
-                const fallbackAddress = `Точка на карте: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-                setter({ lat, lng, address: fallbackAddress });
-            }
-        })
-        .catch(err => {
-            console.error('Ошибка геокодирования:', err);
-            const fallbackAddress = `Точка на карте: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-            setter({ lat, lng, address: fallbackAddress });
-        });
+    const [lat, lng] = coords;
+    setter({ lat, lng, address: 'Определение адреса...' });
+    setMapCenter([lat, lng]);
+
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
+      .then(response => response.json())
+      .then(data => {
+        if (data && data.display_name) {
+          setter({ lat, lng, address: data.display_name });
+        } else {
+          const fallbackAddress = `Точка на карте: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+          setter({ lat, lng, address: fallbackAddress });
+        }
+      })
+      .catch(err => {
+        console.error('Ошибка геокодирования:', err);
+        const fallbackAddress = `Точка на карте: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        setter({ lat, lng, address: fallbackAddress });
+      });
   };
 
   return (
     <div className="mb-4">
       {/* Controls for Transport Mode */}
       {serviceId === '3' && (
-          <div className="mb-3 flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="text-sm font-semibold text-slate-200">Выберите точку для установки на карте:</div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveInput('from')}
-                className={[
-                  'px-3 py-2 rounded-2xl text-sm font-semibold transition border',
-                  activeInput === 'from'
-                    ? 'bg-green-500/15 text-green-200 border-green-500/25'
-                    : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white'
-                ].join(' ')}
-              >
-                Точка A
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveInput('to')}
-                className={[
-                  'px-3 py-2 rounded-2xl text-sm font-semibold transition border',
-                  activeInput === 'to'
-                    ? 'bg-red-500/15 text-red-200 border-red-500/25'
-                    : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white'
-                ].join(' ')}
-              >
-                Точка B
-              </button>
-            </div>
+        <div className="mb-3 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="text-sm font-semibold text-slate-200">Выберите точку для установки на карте:</div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveInput('from')}
+              className={[
+                'px-3 py-2 rounded-2xl text-sm font-semibold transition border',
+                activeInput === 'from'
+                  ? 'bg-green-500/15 text-green-200 border-green-500/25'
+                  : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white'
+              ].join(' ')}
+            >
+              Точка A
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveInput('to')}
+              className={[
+                'px-3 py-2 rounded-2xl text-sm font-semibold transition border',
+                activeInput === 'to'
+                  ? 'bg-red-500/15 text-red-200 border-red-500/25'
+                  : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10 hover:text-white'
+              ].join(' ')}
+            >
+              Точка B
+            </button>
           </div>
+        </div>
       )}
 
       {/* Controls for General Mode */}
       {serviceId !== '3' && (
-          <div className="mb-3">
-            <label className="block text-sm font-semibold text-slate-200 mb-2">
-                Место встречи <span className="text-red-500">*</span>
-            </label>
-            <p className="text-xs text-slate-400 mb-2">
-                Укажите примерный район или место встречи. Точный адрес (квартира, подъезд) вы сможете сообщить помощнику лично.
-            </p>
-            <div className="relative rounded-md shadow-sm">
-                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                    <i className={`fas ${generalLocation ? 'fa-map-marker-alt text-careem-primary' : 'fa-search text-slate-500'}`}></i>
-                </div>
-                <input 
-                    type="text" 
-                    value={generalLocation?.address || ''}
-                    readOnly
-                    className="block w-full rounded-xl border border-white/10 pl-10 focus:border-careem-primary focus:ring-careem-primary/60 sm:text-sm py-3 bg-[#0B1220]/60 text-slate-100 placeholder-slate-500"
-                    placeholder="Нажмите на карту для выбора места" 
-                />
+        <div className="mb-3">
+          <label className="block text-sm font-semibold text-slate-200 mb-2">
+            Место встречи <span className="text-red-500">*</span>
+          </label>
+          <p className="text-xs text-slate-400 mb-2">
+            Укажите примерный район или место встречи. Точный адрес (квартира, подъезд) вы сможете сообщить помощнику лично.
+          </p>
+          <div className="relative rounded-md shadow-sm">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+              <i className={`fas ${generalLocation ? 'fa-map-marker-alt text-careem-primary' : 'fa-search text-slate-500'}`}></i>
             </div>
+            <input
+              type="text"
+              value={generalLocation?.address || ''}
+              readOnly
+              className="block w-full rounded-xl border border-white/10 pl-10 focus:border-careem-primary focus:ring-careem-primary/60 sm:text-sm py-3 bg-[#0B1220]/60 text-slate-100 placeholder-slate-500"
+              placeholder="Нажмите на карту для выбора места"
+            />
           </div>
+        </div>
       )}
 
       {/* Unified Map Instance - Never Unmounts */}
       <div className="h-96 rounded-2xl overflow-hidden border border-white/10 relative z-0 bg-white/5">
         <ErrorBoundary fallback={<div className="h-full w-full bg-white/5 flex items-center justify-center text-slate-400">Ошибка загрузки карты</div>}>
-            <MapContainer 
-                center={[55.75, 37.61]}
-                zoom={10} 
-                style={{ width: '100%', height: '100%' }}
-            >
-                <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    keepBuffer={4}
-                />
-                <MapInvalidator />
-                <MapController center={mapCenter} />
-                
-                <MapEvents 
-                   serviceId={serviceId}
-                   activeInput={activeInput}
-                   setActiveInput={setActiveInput}
-                   updateLocation={updateLocation}
-                   setLocationFrom={setLocationFrom}
-                   setLocationTo={setLocationTo}
-                   setGeneralLocation={setGeneralLocation}
-                />
+          <MapContainer
+            center={[55.75, 37.61]}
+            zoom={10}
+            style={{ width: '100%', height: '100%' }}
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              keepBuffer={4}
+            />
+            <MapInvalidator />
+            <MapController center={mapCenter} />
 
-                {/* Transport Mode Placemarks */}
-                {serviceId === '3' && locationFrom && (
-                    <Marker position={[locationFrom.lat, locationFrom.lng]} icon={iconA}>
-                        <Popup>Точка А: {locationFrom.address}</Popup>
-                    </Marker>
-                )}
-                {serviceId === '3' && locationTo && (
-                    <Marker position={[locationTo.lat, locationTo.lng]} icon={iconB}>
-                         <Popup>Точка Б: {locationTo.address}</Popup>
-                    </Marker>
-                )}
-                
-                {/* Route Line */}
-                {serviceId === '3' && routePositions.length > 0 && (
-                     <Polyline 
-                        positions={routePositions}
-                        color="#2D6BFF"
-                        weight={5}
-                        opacity={0.7}
-                     />
-                )}
+            <MapEvents
+              serviceId={serviceId}
+              activeInput={activeInput}
+              setActiveInput={setActiveInput}
+              updateLocation={updateLocation}
+              setLocationFrom={setLocationFrom}
+              setLocationTo={setLocationTo}
+              setGeneralLocation={setGeneralLocation}
+            />
 
-                {/* General Mode Placemark */}
-                {serviceId !== '3' && generalLocation && (
-                    <Marker position={[generalLocation.lat, generalLocation.lng]}>
-                        <Popup>Место встречи</Popup>
-                    </Marker>
-                )}
-            </MapContainer>
+            {/* Transport Mode Placemarks */}
+            {serviceId === '3' && locationFrom && (
+              <Marker position={[locationFrom.lat, locationFrom.lng]} icon={iconA}>
+                <Popup>Точка А: {locationFrom.address}</Popup>
+              </Marker>
+            )}
+            {serviceId === '3' && locationTo && (
+              <Marker position={[locationTo.lat, locationTo.lng]} icon={iconB}>
+                <Popup>Точка Б: {locationTo.address}</Popup>
+              </Marker>
+            )}
+
+            {/* Route Line */}
+            {serviceId === '3' && routePositions.length > 0 && (
+              <Polyline
+                positions={routePositions}
+                color="#2D6BFF"
+                weight={5}
+                opacity={0.7}
+              />
+            )}
+
+            {/* General Mode Placemark */}
+            {serviceId !== '3' && generalLocation && (
+              <Marker position={[generalLocation.lat, generalLocation.lng]}>
+                <Popup>Место встречи</Popup>
+              </Marker>
+            )}
+          </MapContainer>
         </ErrorBoundary>
 
         {/* Distance Banner */}
         {serviceId === '3' && routeDistance !== null && (
-            <div className="absolute bottom-4 right-4 z-[1000] bg-[#0B1220]/75 px-4 py-2 rounded-2xl shadow-lg border border-white/10 flex items-center gap-2 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4">
-                <div className="bg-[#13213A] p-2 rounded-full text-careem-primary border border-[#1B2D4F]">
-                    <i className="fas fa-route"></i>
-                </div>
-                <div>
-                    <div className="text-xs text-slate-400 font-medium">Расстояние</div>
-                    <div className="text-lg font-extrabold text-slate-100">{routeDistance.toFixed(1)} км</div>
-                </div>
+          <div className="absolute bottom-4 right-4 z-[1000] bg-[#0B1220]/75 px-4 py-2 rounded-2xl shadow-lg border border-white/10 flex items-center gap-2 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-4">
+            <div className="bg-[#13213A] p-2 rounded-full text-careem-primary border border-[#1B2D4F]">
+              <i className="fas fa-route"></i>
             </div>
+            <div>
+              <div className="text-xs text-slate-400 font-medium">Расстояние</div>
+              <div className="text-lg font-extrabold text-slate-100">{routeDistance.toFixed(1)} км</div>
+            </div>
+          </div>
         )}
       </div>
-      
+
       {serviceId === '3' ? (
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="rounded-2xl border border-white/10 bg-[#0B1220]/60 px-4 py-3">
@@ -322,9 +323,9 @@ const UnifiedMapPicker = ({
       ) : null}
 
       <p className="text-xs text-slate-400 mt-3 text-center">
-         {serviceId === '3' 
-            ? '* Нажмите на поле "Откуда" или "Куда", затем кликните по карте.' 
-            : '* Выберите точку встречи на карте.'}
+        {serviceId === '3'
+          ? '* Нажмите на поле "Откуда" или "Куда", затем кликните по карте.'
+          : '* Выберите точку встречи на карте.'}
       </p>
     </div>
   );
@@ -332,20 +333,20 @@ const UnifiedMapPicker = ({
 
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   var R = 6371; // Radius of the earth in km
-  var dLat = deg2rad(lat2-lat1);  // deg2rad below
-  var dLon = deg2rad(lon2-lon1); 
-  var a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2)
-    ; 
-  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  var dLat = deg2rad(lat2 - lat1);  // deg2rad below
+  var dLon = deg2rad(lon2 - lon1);
+  var a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    ;
+  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   var d = R * c; // Distance in km
   return d;
 }
 
 function deg2rad(deg: number) {
-  return deg * (Math.PI/180)
+  return deg * (Math.PI / 180)
 }
 
 const CreateOrder: React.FC = () => {
@@ -366,7 +367,7 @@ const CreateOrder: React.FC = () => {
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const [voiceMessage, setVoiceMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
 
@@ -381,7 +382,7 @@ const CreateOrder: React.FC = () => {
     const fetchRealRatings = async () => {
       const supabase = getSupabase();
       if (!supabase) return;
-      
+
       const { data } = await supabase
         .from('orders')
         .select('executor_id, rating')
@@ -406,7 +407,7 @@ const CreateOrder: React.FC = () => {
         setRealRatings(averages);
       }
     };
-    
+
     fetchRealRatings();
   }, []);
   const [locationFrom, setLocationFrom] = useState<Location | undefined>(undefined);
@@ -473,21 +474,7 @@ const CreateOrder: React.FC = () => {
     }
   };
 
-  const getSupabase = () => {
-    const url = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
-    const key = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined;
-    if (!url || !key) return null;
-    return createClient(url, key, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        lock: async (_name, _acquireTimeout, fn) => {
-          return await fn();
-        }
-      }
-    });
-  };
+
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -496,34 +483,7 @@ const CreateOrder: React.FC = () => {
       return;
     }
 
-    const profileRowToUser = (row: any) => {
-      return {
-        id: row.id ?? row.user_id ?? row.userId,
-        role: row.role,
-        name: row.name || '',
-        email: row.email || '',
-        phone: row.phone || '',
-        telegramId: row.telegram_id ?? row.telegramId,
-        avatar: row.avatar ?? row.avatar_url,
-        rating: row.rating ?? undefined,
-        reviewsCount: row.reviews_count ?? row.reviewsCount,
-        reviews: row.reviews ?? undefined,
-        location: row.location ?? undefined,
-        locationCoordinates: row.location_coordinates ?? row.locationCoordinates,
-        coverageRadius: row.coverage_radius ?? row.coverageRadius,
-        description: row.description ?? undefined,
-        profileVerificationStatus: row.profile_verification_status ?? row.profileVerificationStatus,
-        vehiclePhoto: row.vehicle_photo ?? row.vehiclePhoto,
-        customServices: row.custom_services ?? row.customServices,
-        subscriptionStatus: row.subscription_status ?? row.subscriptionStatus,
-        subscriptionStartDate: row.subscription_start_date ?? row.subscriptionStartDate,
-        subscriptionEndDate: row.subscription_end_date ?? row.subscriptionEndDate,
-        subscribedToCustomerId: row.subscribed_to_customer_id ?? row.subscribedToCustomerId,
-        subscriptionRequestToCustomerId: row.subscription_request_to_customer_id ?? row.subscriptionRequestToCustomerId,
-        subscribedExecutorId: row.subscribed_executor_id ?? row.subscribedExecutorId,
-        notifications: row.notifications ?? undefined
-      };
-    };
+
 
     const supabase = getSupabase();
     if (!supabase) {
@@ -602,7 +562,7 @@ const CreateOrder: React.FC = () => {
 
       recorder.onstop = () => {
         setIsProcessingAudio(true);
-        
+
         if (chunksRef.current.length === 0) {
           setIsProcessingAudio(false);
           return;
@@ -613,9 +573,9 @@ const CreateOrder: React.FC = () => {
           (chunksRef.current[0] instanceof Blob ? chunksRef.current[0].type : '') ||
           supportedMimeType ||
           'audio/webm';
-        
+
         const blob = new Blob(chunksRef.current, { type: blobType });
-        
+
         void (async () => {
           try {
             // Try to convert to WAV for better compatibility
@@ -650,7 +610,7 @@ const CreateOrder: React.FC = () => {
   const stopRecording = (e?: React.MouseEvent) => {
     e?.preventDefault();
     e?.stopPropagation();
-    
+
     if (mediaRecorderRef.current && isRecording) {
       setIsProcessingAudio(true); // Set processing state immediately to prevent UI flicker
       mediaRecorderRef.current.stop();
@@ -719,15 +679,15 @@ const CreateOrder: React.FC = () => {
 
     // Validate location
     if (serviceId === '3') { // Transport
-       if (!locationFrom || !locationTo) {
-         toast.error('Пожалуйста, укажите точки "Откуда" и "Куда" на карте');
-         return;
-       }
+      if (!locationFrom || !locationTo) {
+        toast.error('Пожалуйста, укажите точки "Откуда" и "Куда" на карте');
+        return;
+      }
     } else {
-       if (!generalLocation) {
-         toast.error('Пожалуйста, укажите место встречи на карте');
-         return;
-       }
+      if (!generalLocation) {
+        toast.error('Пожалуйста, укажите место встречи на карте');
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -791,13 +751,13 @@ const CreateOrder: React.FC = () => {
   }
 
   return (
-      <div className="py-10 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-2xl mx-auto rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.35)] overflow-hidden">
-          <div className="px-6 py-5 border-b border-white/10">
-            <h1 className="text-xl font-extrabold text-slate-100">Создание заказа</h1>
-          </div>
-          
-          <form onSubmit={handleSubmit} className="p-6 space-y-6">
+    <div className="py-10 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-2xl mx-auto rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl shadow-[0_18px_60px_rgba(0,0,0,0.35)] overflow-hidden">
+        <div className="px-6 py-5 border-b border-white/10">
+          <h1 className="text-xl font-extrabold text-slate-100">Создание заказа</h1>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Service Selection */}
           <div>
             <label className="block text-sm font-semibold text-slate-200 mb-2">
@@ -818,39 +778,38 @@ const CreateOrder: React.FC = () => {
                     isAvailable = false;
                   }
                 } else {
-                   // Find min price for "Any available specialist"
-                   const allPrices = executors
+                  // Find min price for "Any available specialist"
+                  const allPrices = executors
                     .map(ex => {
                       const customService = ex.customServices?.find((s: any) => s.serviceId === service.id && s.enabled);
                       return customService ? customService.price : null;
                     })
                     .filter(p => p !== null && p !== undefined) as number[];
-                  
-                   if (allPrices.length > 0) {
-                      const minPrice = Math.min(...allPrices);
-                      displayPrice = `от ${minPrice}`;
-                   }
+
+                  if (allPrices.length > 0) {
+                    const minPrice = Math.min(...allPrices);
+                    displayPrice = `от ${minPrice}`;
+                  }
                 }
 
                 return (
-                  <div 
+                  <div
                     key={service.id}
                     onClick={() => isAvailable && handleServiceChange(service.id)}
-                    className={`border rounded-2xl p-4 transition relative ${
-                      !isAvailable 
-                        ? 'bg-white/5 border-white/10 opacity-50 cursor-not-allowed grayscale' 
-                        : serviceId === service.id 
-                          ? 'border-careem-primary bg-[#13213A] ring-1 ring-careem-primary/40 cursor-pointer' 
+                    className={`border rounded-2xl p-4 transition relative ${!isAvailable
+                        ? 'bg-white/5 border-white/10 opacity-50 cursor-not-allowed grayscale'
+                        : serviceId === service.id
+                          ? 'border-careem-primary bg-[#13213A] ring-1 ring-careem-primary/40 cursor-pointer'
                           : 'border-white/10 hover:border-white/20 bg-white/5 cursor-pointer'
-                    }`}
+                      }`}
                   >
                     <div className="font-semibold text-slate-100 flex justify-between items-start gap-3">
-                       <span>{service.name}</span>
-                       {isAvailable && selectedExecutor && (
-                         <span className="text-xs bg-[#13213A] text-slate-200 px-2 py-0.5 rounded-full border border-[#1B2D4F] shrink-0">
-                           Тариф
-                         </span>
-                       )}
+                      <span>{service.name}</span>
+                      {isAvailable && selectedExecutor && (
+                        <span className="text-xs bg-[#13213A] text-slate-200 px-2 py-0.5 rounded-full border border-[#1B2D4F] shrink-0">
+                          Тариф
+                        </span>
+                      )}
                     </div>
                     <div className={`text-sm mt-2 ${isAvailable ? 'text-slate-400' : 'text-slate-500'}`}>
                       {isAvailable ? `${displayPrice} ₽/час` : 'Не предоставляется'}
@@ -882,25 +841,25 @@ const CreateOrder: React.FC = () => {
 
           {/* Location Selection */}
           <div className="bg-white/5 p-4 sm:p-6 rounded-3xl border border-white/10 relative">
-             <h3 className="font-bold text-slate-100 mb-4">Место оказания услуги</h3>
-             
-             {isSwitching && (
-               <div className="absolute inset-0 bg-[#0B1220]/40 z-10 flex items-center justify-center backdrop-blur-sm rounded-3xl">
-                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-careem-primary"></div>
-               </div>
-             )}
+            <h3 className="font-bold text-slate-100 mb-4">Место оказания услуги</h3>
 
-             <div className="grid grid-cols-1 gap-4">
-                 <UnifiedMapPicker 
-                    serviceId={serviceId}
-                    locationFrom={locationFrom}
-                    locationTo={locationTo}
-                    generalLocation={generalLocation}
-                    setLocationFrom={setLocationFrom}
-                    setLocationTo={setLocationTo}
-                    setGeneralLocation={setGeneralLocation}
-                 />
-             </div>
+            {isSwitching && (
+              <div className="absolute inset-0 bg-[#0B1220]/40 z-10 flex items-center justify-center backdrop-blur-sm rounded-3xl">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-careem-primary"></div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-4">
+              <UnifiedMapPicker
+                serviceId={serviceId}
+                locationFrom={locationFrom}
+                locationTo={locationTo}
+                generalLocation={generalLocation}
+                setLocationFrom={setLocationFrom}
+                setLocationTo={setLocationTo}
+                setGeneralLocation={setGeneralLocation}
+              />
+            </div>
           </div>
 
           {/* Date and Time */}
@@ -1016,70 +975,68 @@ const CreateOrder: React.FC = () => {
 
           {/* Price Input */}
           <div>
-             <label className="block text-sm font-semibold text-slate-200 mb-2">
-                {selectedExecutor ? 'Стоимость услуги (Тариф помощника)' : 'Предложите вашу цену (₽)'} <span className="text-red-500">*</span>
-             </label>
-             <div className="relative rounded-xl shadow-sm">
-               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                 <span className="text-slate-400 sm:text-sm">₽</span>
-               </div>
-               <input
-                 type="number"
-                 value={price || ''}
-                 readOnly={!!selectedExecutor}
-                 onChange={(e) => !selectedExecutor && setPrice(Number(e.target.value))}
-                 className={`block w-full rounded-xl border border-white/10 pl-7 pr-12 focus:border-careem-primary focus:ring-careem-primary/60 sm:text-sm border py-3 px-4 bg-[#0B1220]/60 text-slate-100 ${
-                   selectedExecutor ? 'opacity-70 cursor-not-allowed' : ''
-                 }`}
-                 placeholder="0.00"
-                 min="0"
-               />
-               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                 <span className="text-slate-400 sm:text-sm">RUB</span>
-               </div>
-             </div>
-             {selectedExecutor && (
-               <p className="mt-2 text-sm text-slate-400">
-                 * Цена установлена выбранным помощником.
-               </p>
-             )}
+            <label className="block text-sm font-semibold text-slate-200 mb-2">
+              {selectedExecutor ? 'Стоимость услуги (Тариф помощника)' : 'Предложите вашу цену (₽)'} <span className="text-red-500">*</span>
+            </label>
+            <div className="relative rounded-xl shadow-sm">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                <span className="text-slate-400 sm:text-sm">₽</span>
+              </div>
+              <input
+                type="number"
+                value={price || ''}
+                readOnly={!!selectedExecutor}
+                onChange={(e) => !selectedExecutor && setPrice(Number(e.target.value))}
+                className={`block w-full rounded-xl border border-white/10 pl-7 pr-12 focus:border-careem-primary focus:ring-careem-primary/60 sm:text-sm border py-3 px-4 bg-[#0B1220]/60 text-slate-100 ${selectedExecutor ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
+                placeholder="0.00"
+                min="0"
+              />
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                <span className="text-slate-400 sm:text-sm">RUB</span>
+              </div>
+            </div>
+            {selectedExecutor && (
+              <p className="mt-2 text-sm text-slate-400">
+                * Цена установлена выбранным помощником.
+              </p>
+            )}
           </div>
 
           {/* Allow Open Selection Checkbox */}
           {executorId && (
             <div className="bg-white/5 p-4 rounded-2xl border border-white/10 flex items-start gap-3">
-               <div className="flex h-6 items-center">
-                 <input
-                   id="allow-open-selection"
-                   name="allow-open-selection"
-                   type="checkbox"
-                   checked={allowOpenSelection}
-                   onChange={(e) => setAllowOpenSelection(e.target.checked)}
-                   className="h-5 w-5 rounded border-white/10 bg-[#0B1220]/60 text-careem-primary focus:ring-careem-primary/60 focus:ring-offset-0"
-                 />
-               </div>
-               <div className="text-sm">
-                 <label htmlFor="allow-open-selection" className="font-medium text-slate-200 block cursor-pointer">
-                   Если выбранный помощник откажется, отправить заказ всем
-                 </label>
-                 <p className="text-slate-400 mt-1">
-                   При отказе конкретного исполнителя заказ автоматически станет доступен всем свободным помощникам в ленте.
-                 </p>
-               </div>
+              <div className="flex h-6 items-center">
+                <input
+                  id="allow-open-selection"
+                  name="allow-open-selection"
+                  type="checkbox"
+                  checked={allowOpenSelection}
+                  onChange={(e) => setAllowOpenSelection(e.target.checked)}
+                  className="h-5 w-5 rounded border-white/10 bg-[#0B1220]/60 text-careem-primary focus:ring-careem-primary/60 focus:ring-offset-0"
+                />
+              </div>
+              <div className="text-sm">
+                <label htmlFor="allow-open-selection" className="font-medium text-slate-200 block cursor-pointer">
+                  Если выбранный помощник откажется, отправить заказ всем
+                </label>
+                <p className="text-slate-400 mt-1">
+                  При отказе конкретного исполнителя заказ автоматически станет доступен всем свободным помощникам в ленте.
+                </p>
+              </div>
             </div>
           )}
 
           {/* Submit Button */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-white/10">
-             <div className="text-lg font-extrabold text-slate-100">
-               Итого: <span className="text-careem-primary">{price} ₽</span>
-             </div>
-             <button
+            <div className="text-lg font-extrabold text-slate-100">
+              Итого: <span className="text-careem-primary">{price} ₽</span>
+            </div>
+            <button
               type="submit"
               disabled={isSubmitting || isProcessingAudio || isRecording}
-              className={`bg-careem-primary/80 text-white font-semibold py-3 px-8 rounded-2xl hover:bg-[#255EE6] transition shadow-lg shadow-[#2D6BFF]/20 flex items-center justify-center gap-2 w-full sm:w-auto ${
-                (isSubmitting || isProcessingAudio || isRecording) ? 'opacity-70 cursor-wait' : ''
-              }`}
+              className={`bg-careem-primary/80 text-white font-semibold py-3 px-8 rounded-2xl hover:bg-[#255EE6] transition shadow-lg shadow-[#2D6BFF]/20 flex items-center justify-center gap-2 w-full sm:w-auto ${(isSubmitting || isProcessingAudio || isRecording) ? 'opacity-70 cursor-wait' : ''
+                }`}
             >
               {isSubmitting || isProcessingAudio ? (
                 <>

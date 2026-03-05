@@ -4,7 +4,8 @@ import { SERVICE_TYPES } from '../constants';
 import { Order, OrderStatus, Review, UserRole, User } from '../types';
 import { MapContainer, TileLayer, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabase } from '../services/supabaseClient';
+import { profileRowToUser } from '../services/mappers';
 import { useAuth } from '../context/AuthContext';
 
 interface UserProfileProps {
@@ -34,47 +35,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
   const [displayRating, setDisplayRating] = useState('5.0');
   const [hasPendingRequest, setHasPendingRequest] = useState(false);
 
-  const getSupabase = () => {
-    const url = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
-    const key = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined;
-    if (!url || !key) return null;
-    return createClient(url, key, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-      }
-    });
-  };
 
-  const profileRowToUser = (row: any): User => {
-    return {
-      id: row.id ?? row.user_id ?? row.userId,
-      role: row.role,
-      name: row.name || '',
-      email: row.email || '',
-      phone: row.phone || '',
-      telegramId: row.telegram_id ?? row.telegramId,
-      avatar: row.avatar ?? row.avatar_url,
-      rating: row.rating ?? undefined,
-      reviewsCount: row.reviews_count ?? row.reviewsCount,
-      reviews: row.reviews ?? undefined,
-      location: row.location ?? undefined,
-      locationCoordinates: row.location_coordinates ?? row.locationCoordinates,
-      coverageRadius: row.coverage_radius ?? row.coverageRadius,
-      description: row.description ?? undefined,
-      profileVerificationStatus: row.profile_verification_status ?? row.profileVerificationStatus,
-      vehiclePhoto: row.vehicle_photo ?? row.vehiclePhoto,
-      customServices: row.custom_services ?? row.customServices,
-      subscriptionStatus: row.subscription_status ?? row.subscriptionStatus,
-      subscriptionStartDate: row.subscription_start_date ?? row.subscriptionStartDate,
-      subscriptionEndDate: row.subscription_end_date ?? row.subscriptionEndDate,
-      subscribedToCustomerId: row.subscribed_to_customer_id ?? row.subscribedToCustomerId,
-      subscriptionRequestToCustomerId: row.subscription_request_to_customer_id ?? row.subscriptionRequestToCustomerId,
-      subscribedExecutorId: row.subscribed_executor_id ?? row.subscribedExecutorId,
-      notifications: row.notifications ?? undefined
-    };
-  };
 
   useEffect(() => {
     if (!id) {
@@ -82,7 +43,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
       setIsLoading(false);
       return;
     }
-    
+
     setIsLoading(true);
     let isActive = true;
     const supabase = getSupabase();
@@ -128,9 +89,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
     void (async () => {
       const { data } = await supabase.from('orders').select('status, rating').eq('executor_id', user.id);
       if (!isActive) return;
-      
+
       const rows = Array.isArray(data) ? data : [];
-      
+
       // 1. Completed Orders Count
       const statuses = rows.map((r: any) => r.status as OrderStatus);
       const completed = statuses.filter((s) => s === OrderStatus.COMPLETED).length;
@@ -139,7 +100,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
       // 2. Responsibility Percent
       const finished = statuses.filter((s) => s === OrderStatus.COMPLETED || s === OrderStatus.CANCELLED || s === OrderStatus.REJECTED).length;
       const percent = finished > 0 ? Math.round((completed / finished) * 100) : 0;
-      
+
       // Show "......." if no finished orders or responsibility is less than 80%
       // As per user request: "пока нет оценок просто ....... а уже когда наберется 80 % то тогда можно вывести в этот блок"
       if (finished === 0 || percent < 80) {
@@ -152,7 +113,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
       const ratings = rows
         .filter((r: any) => typeof r.rating === 'number' && r.rating > 0)
         .map((r: any) => r.rating);
-      
+
       if (ratings.length > 0) {
         const total = ratings.reduce((sum: number, r: number) => sum + r, 0);
         const avg = total / ratings.length;
@@ -223,7 +184,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
         <div className="max-w-xl mx-auto text-center bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur-xl">
           <h2 className="text-2xl font-extrabold text-slate-100 mb-2">Пользователь не найден</h2>
           <p className="text-slate-300 mb-6">Возможно, профиль был удален или ссылка неверна.</p>
-          <button 
+          <button
             onClick={() => navigate('/')}
             className="text-careem-primary hover:text-white font-semibold"
           >
@@ -239,7 +200,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Profile Header */}
         <div className="relative rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl overflow-hidden shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
-          <button 
+          <button
             onClick={() => navigate(-1)}
             className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md text-white border border-white/20 transition-all shadow-lg"
           >
@@ -250,9 +211,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
             <div className="-mt-12 sm:-mt-16 flex flex-col sm:flex-row sm:items-end gap-4">
               <div className="shrink-0">
                 {user.avatar ? (
-                  <img 
-                    src={user.avatar} 
-                    alt={user.name} 
+                  <img
+                    src={user.avatar}
+                    alt={user.name}
                     className="h-24 w-24 sm:h-28 sm:w-28 rounded-2xl border border-white/10 object-cover bg-[#13213A] max-w-full shadow-lg"
                   />
                 ) : (
@@ -273,12 +234,12 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
                 </div>
                 {user.location && (
                   <p className="text-sm text-slate-400 flex items-center mt-2">
-                    <i className="fas fa-map-marker-alt mr-2 text-careem-primary"></i> 
+                    <i className="fas fa-map-marker-alt mr-2 text-careem-primary"></i>
                     <span className="truncate">{user.location}</span>
                   </p>
                 )}
               </div>
-              
+
               {user.role === UserRole.EXECUTOR && (
                 <div className="sm:ml-auto">
                   <button
@@ -311,23 +272,23 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
           <div className="rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl p-6 sm:p-8 shadow-[0_18px_60px_rgba(0,0,0,0.35)] animate-in fade-in duration-500">
             <h3 className="text-lg font-bold text-slate-100 mb-4">Зона работы</h3>
             <div className="h-64 rounded-2xl overflow-hidden border border-white/10 z-0 relative">
-                 <MapContainer 
-                   center={[user.locationCoordinates.lat, user.locationCoordinates.lng]} 
-                   zoom={11}
-                   style={{ height: '100%', width: '100%' }}
-                 >
-                   <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            keepBuffer={4}
-          />
-          <MapInvalidator />
-                   <Circle 
-                     center={[user.locationCoordinates.lat, user.locationCoordinates.lng]} 
-                     radius={(user.coverageRadius || 5) * 1000}
-                     pathOptions={{ fillColor: '#2D6BFF', color: '#2D6BFF', fillOpacity: 0.18, weight: 2 }} 
-                   />
-                 </MapContainer>
+              <MapContainer
+                center={[user.locationCoordinates.lat, user.locationCoordinates.lng]}
+                zoom={11}
+                style={{ height: '100%', width: '100%' }}
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  keepBuffer={4}
+                />
+                <MapInvalidator />
+                <Circle
+                  center={[user.locationCoordinates.lat, user.locationCoordinates.lng]}
+                  radius={(user.coverageRadius || 5) * 1000}
+                  pathOptions={{ fillColor: '#2D6BFF', color: '#2D6BFF', fillOpacity: 0.18, weight: 2 }}
+                />
+              </MapContainer>
             </div>
             <p className="text-sm text-slate-400 mt-4 flex items-start gap-2">
               <i className="fas fa-info-circle mt-0.5 text-careem-primary"></i>
@@ -363,9 +324,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ onBook }) => {
               <div className="rounded-3xl border border-white/10 bg-[#0B1220]/60 backdrop-blur-xl p-6 sm:p-8 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
                 <h3 className="text-lg font-bold text-slate-100 mb-4">Фото транспорта</h3>
                 <div className="rounded-2xl overflow-hidden w-full bg-white/5 border border-white/10 flex justify-center">
-                  <img 
-                    src={user.vehiclePhoto} 
-                    alt="Транспорт" 
+                  <img
+                    src={user.vehiclePhoto}
+                    alt="Транспорт"
                     className="max-w-full h-auto max-h-[80vh] object-contain hover:scale-105 transition duration-500"
                   />
                 </div>

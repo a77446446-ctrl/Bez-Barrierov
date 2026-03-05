@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import { User, UserRole } from '../types';
+import { getSupabase } from '../services/supabaseClient';
+import { profileRowToUser, userToProfileUpdate, resolveProfileIdColumn } from '../services/mappers';
 
 interface AuthContextType {
   user: User | null;
@@ -9,7 +10,6 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
-  /* ... existing code ... */
   updateUser: (user: User) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   loginWithTelegram: () => Promise<void>;
@@ -17,102 +17,10 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-let profileIdColumnCache: 'id' | 'user_id' | null = null;
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  /* ... existing state ... */
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  const getSupabase = () => {
-    const url = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
-    const key = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined;
-    if (!url || !key) return null;
-    return createClient(url, key, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        lock: async (_name, _acquireTimeout, fn) => {
-          return await fn();
-        }
-      }
-    });
-  };
-
-  const resolveProfileIdColumn = async (supabase: any): Promise<'id' | 'user_id'> => {
-    if (profileIdColumnCache) return profileIdColumnCache;
-    const { error } = await supabase.from('profiles').select('id').limit(1);
-    if (
-      error &&
-      (/column profiles\.id does not exist/i.test(error.message) ||
-        /Could not find the 'id' column of 'profiles' in the schema cache/i.test(error.message))
-    ) {
-      profileIdColumnCache = 'user_id';
-      return profileIdColumnCache;
-    }
-    profileIdColumnCache = 'id';
-    return profileIdColumnCache;
-  };
-
-  const profileRowToUser = (row: any): User => {
-    return {
-      id: row.id ?? row.user_id ?? row.userId,
-      role: row.role,
-      name: row.name || '',
-      email: row.email || '',
-      phone: row.phone || '',
-      telegramId: row.telegram_id ?? row.telegramId,
-      avatar: row.avatar ?? row.avatar_url,
-      isSubscribed: row.is_subscribed ?? row.isSubscribed,
-      rating: row.rating ?? undefined,
-      reviewsCount: row.reviews_count ?? row.reviewsCount,
-      reviews: row.reviews ?? undefined,
-      location: row.location ?? undefined,
-      locationCoordinates: row.location_coordinates ?? row.locationCoordinates,
-      coverageRadius: row.coverage_radius ?? row.coverageRadius,
-      description: row.description ?? undefined,
-      profileVerificationStatus: row.profile_verification_status ?? row.profileVerificationStatus,
-      vehiclePhoto: row.vehicle_photo ?? row.vehiclePhoto,
-      customServices: row.custom_services ?? row.customServices,
-      subscriptionStatus: row.subscription_status ?? row.subscriptionStatus,
-      subscriptionStartDate: row.subscription_start_date ?? row.subscriptionStartDate,
-      subscriptionEndDate: row.subscription_end_date ?? row.subscriptionEndDate,
-      subscribedToCustomerId: row.subscribed_to_customer_id ?? row.subscribedToCustomerId,
-      subscriptionRequestToCustomerId: row.subscription_request_to_customer_id ?? row.subscriptionRequestToCustomerId,
-      subscribedExecutorId: row.subscribed_executor_id ?? row.subscribedExecutorId,
-      notifications: row.notifications ?? undefined
-    };
-  };
-
-  const userToProfileUpdate = (u: User) => {
-    return {
-      role: u.role,
-      name: u.name,
-      email: u.email,
-      phone: u.phone,
-      telegram_id: u.telegramId ?? null,
-      avatar: u.avatar ?? null,
-      is_subscribed: u.isSubscribed ?? null,
-      rating: u.rating ?? null,
-      reviews_count: u.reviewsCount ?? null,
-      reviews: u.reviews ?? null,
-      location: u.location ?? null,
-      location_coordinates: u.locationCoordinates ?? null,
-      coverage_radius: u.coverageRadius ?? null,
-      description: u.description ?? null,
-      profile_verification_status: u.profileVerificationStatus ?? null,
-      vehicle_photo: u.vehiclePhoto ?? null,
-      custom_services: u.customServices ?? null,
-      subscription_status: u.subscriptionStatus ?? null,
-      subscription_start_date: u.subscriptionStartDate ?? null,
-      subscription_end_date: u.subscriptionEndDate ?? null,
-      subscribed_to_customer_id: u.subscribedToCustomerId ?? null,
-      subscription_request_to_customer_id: u.subscriptionRequestToCustomerId ?? null,
-      subscribed_executor_id: u.subscribedExecutorId ?? null,
-      notifications: u.notifications ?? null
-    };
-  };
 
   const fetchProfileById = async (supabase: any, id: string) => {
     const col = await resolveProfileIdColumn(supabase);
@@ -272,10 +180,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) {
           if (/invalid login credentials/i.test(signInError.message)) {
-            // Check if profile exists to distinguish between "Active User" and "Zombie User" (deleted profile but kept auth)
             const existingProfile = await fetchProfileByEmail(supabase, email);
             if (!existingProfile) {
-               throw new Error('ACCOUNT_DELETED_BUT_AUTH_EXISTS');
+              throw new Error('ACCOUNT_DELETED_BUT_AUTH_EXISTS');
             }
             throw new Error('Этот email уже зарегистрирован. Неверный пароль. Войдите или восстановите пароль.');
           }
@@ -295,8 +202,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const profile = await createOrUpdateProfile(authUser.id);
     setUser(profile);
-
   };
+
   const resetPassword = async (email: string) => {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase не настроен');
@@ -312,7 +219,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (error) throw error;
   };
 
-
   const loginWithGoogle = async () => {
     const supabase = getSupabase();
     if (!supabase) throw new Error('Supabase не настроен');
@@ -324,11 +230,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     throw new Error('Вход через Telegram не настроен');
   };
 
-  const logout = () => {
+  const logout = async () => {
     setUser(null);
     const supabase = getSupabase();
     if (supabase) {
-      void supabase.auth.signOut();
+      await supabase.auth.signOut();
     }
   };
 
