@@ -3033,7 +3033,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                     const canRequestSubscription = isDirectOrder &&
                                       (!customer.subscriptionStatus || customer.subscriptionStatus === 'none');
 
-                                    const BOT_USERNAME = 'filfgzrilhouWte';
+                                    const BOT_USERNAME = 'NoBarriers_BOT';
                                     const chatLink = `https://t.me/${BOT_USERNAME}?start=chat_${order.id}_to_${customer.id}`;
 
                                     return (
@@ -3121,7 +3121,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                     const executor = allUsers.find(u => u.id === order.executorId);
                                     if (!executor) return null;
 
-                                    const BOT_USERNAME = 'filfgzrilhouWte';
+                                    const BOT_USERNAME = 'NoBarriers_BOT';
                                     const chatLink = `https://t.me/${BOT_USERNAME}?start=chat_${order.id}_to_${executor.id}`;
 
                                     return (
