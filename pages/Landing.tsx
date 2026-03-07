@@ -214,10 +214,10 @@ const Landing: React.FC<LandingProps> = ({ onViewProfile, onBook }) => {
                   {isInstallable && (
                     <button
                       onClick={handleInstallClick}
-                      className="rounded-2xl bg-careem-primary transition-all hover:bg-careem-accent hover:shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:-translate-y-0.5 text-white font-medium py-3.5 px-6 shadow-lg shadow-careem-primary/25 flex items-center justify-center gap-2.5"
+                      className="rounded-2xl bg-gradient-to-r from-careem-primary to-blue-600 transition-all hover:shadow-[0_0_25px_rgba(37,99,235,0.6)] hover:-translate-y-0.5 text-white font-bold py-3.5 px-6 shadow-lg shadow-careem-primary/30 flex items-center justify-center gap-2.5 animate-pulse-slow"
                     >
                       <i className="fas fa-download"></i>
-                      Установить PWA
+                      Установить на главный экран
                     </button>
                   )}
                 </div>
