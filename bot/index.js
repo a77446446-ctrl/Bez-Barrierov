@@ -14,8 +14,11 @@ if (!BOT_TOKEN) {
     console.error('❌ BOT_TOKEN не задан в .env');
     process.exit(1);
 }
+
 if (!SUPABASE_URL || !SUPABASE_KEY || SUPABASE_URL.includes('your-project')) {
-    console.warn('⚠️  Supabase не настроен — сообщения не будут сохраняться в БД');
+    console.warn(`⚠️  Supabase не настроен — сообщения не будут сохраняться в БД (URL: ${SUPABASE_URL ? 'OK' : 'MISSING'}, KEY: ${SUPABASE_KEY ? 'OK' : 'MISSING'})`);
+} else {
+    console.log(`✅ Supabase подключен (URL: ${SUPABASE_URL})`);
 }
 
 const bot = new Telegraf(BOT_TOKEN);
@@ -51,17 +54,39 @@ bot.start(async (ctx) => {
         return ctx.reply('⚠️ Не удалось привязать аккаунт — попробуйте позже.');
     }
 
-    // Сценарий 2: Начало чата по заказу → /start chat_ORDER_to_RECEIVER
+    // Сценарий 2: Начало чата по заказу → /start chat_ORDERIDWITHOUTHYPHENS_ROLE
     if (param.startsWith('chat_')) {
-        const withoutPrefix = param.replace('chat_', '');
-        const toIndex = withoutPrefix.indexOf('_to_');
-        if (toIndex === -1) return ctx.reply('⚠️ Неверный формат ссылки.');
+        console.log("RECEIVED START PARAM:", param);
+        const match = param.match(/^chat_([a-fA-F0-9]{32})_(c|e)$/);
+        if (!match) return ctx.reply('⚠️ Неверный формат ссылки.');
 
-        const orderId = withoutPrefix.substring(0, toIndex);
-        const receiverId = withoutPrefix.substring(toIndex + 4);
+        const orderIdHex = match[1];
+        const roleStr = match[2];
 
-        chatSessions.set(`session_${telegramChatId}`, { orderId, receiverId, telegramChatId });
-        return ctx.reply('💬 Напишите ваше сообщение.\nОно будет проверено администратором перед отправкой.');
+        // Restore UUID format: 8-4-4-4-12
+        const orderId = `${orderIdHex.slice(0, 8)}-${orderIdHex.slice(8, 12)}-${orderIdHex.slice(12, 16)}-${orderIdHex.slice(16, 20)}-${orderIdHex.slice(20)}`;
+
+        if (!supabase) return ctx.reply('⚠️ Ошибка базы данных.');
+
+        // Fetch Order
+        const { data: order, error } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
+        if (error || !order) return ctx.reply('⚠️ Заказ не найден.');
+
+        let senderId = null;
+        let receiverId = null;
+
+        if (roleStr === 'c') {
+            senderId = order.customer_id;
+            receiverId = order.executor_id;
+        } else if (roleStr === 'e') {
+            senderId = order.executor_id;
+            receiverId = order.customer_id;
+        }
+
+        if (!senderId || !receiverId) return ctx.reply('⚠️ Не удалось определить участников заказа.');
+
+        chatSessions.set(`session_${telegramChatId}`, { orderId, senderId, receiverId, telegramChatId });
+        return ctx.reply('💬 Напишите ваше сообщение.\nОно будет проверено модератором, после чего появится прямо в окне заказа в приложении БезБарьеров.');
     }
 
     // Приветствие по умолчанию
@@ -88,13 +113,17 @@ bot.on('text', async (ctx) => {
 
         const finalMsg = { ...msg, text };
         if (supabase) {
-            await supabase.from('order_messages').insert({
-                order_id: finalMsg.orderId,
-                sender_id: finalMsg.senderId,
-                receiver_id: finalMsg.receiverId,
-                text: finalMsg.text,
-                is_approved: true
-            }).catch(() => { });
+            try {
+                await supabase.from('order_messages').insert({
+                    order_id: finalMsg.orderId,
+                    sender_id: finalMsg.senderId,
+                    receiver_id: finalMsg.receiverId,
+                    text: finalMsg.text,
+                    is_approved: true
+                });
+            } catch (err) {
+                console.error('Ошибка сохранения ответа:', err.message);
+            }
         }
         if (finalMsg.receiverTgChatId) {
             await bot.telegram.sendMessage(
@@ -117,14 +146,14 @@ bot.on('text', async (ctx) => {
         return ctx.reply('ℹ️ Перейдите в приложение и нажмите кнопку «Написать», чтобы отправить сообщение.');
     }
 
-    const { orderId, receiverId } = session;
+    const { orderId, senderId, receiverId } = session;
 
-    // Ищем профили отправителя и получателя
+    // Ищем профили отправителя и получателя (чтобы взять имена)
     let senderProfile = null;
     let receiverProfile = null;
     if (supabase) {
         const [sp, rp] = await Promise.all([
-            supabase.from('profiles').select('*').eq('telegram_chat_id', chatId).maybeSingle(),
+            supabase.from('profiles').select('*').eq('id', senderId).maybeSingle(),
             supabase.from('profiles').select('*').eq('id', receiverId).maybeSingle()
         ]);
         senderProfile = sp.data;
@@ -136,7 +165,7 @@ bot.on('text', async (ctx) => {
 
     const msgKey = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     pendingMessages.set(msgKey, {
-        senderId: senderProfile?.id || chatId,
+        senderId,
         receiverId,
         orderId,
         senderName,
@@ -146,7 +175,7 @@ bot.on('text', async (ctx) => {
         receiverTgChatId: receiverProfile?.telegram_chat_id || null
     });
 
-    await ctx.reply('⌛ Сообщение отправлено на проверку. После одобрения оно будет доставлено.');
+    await ctx.reply('⌛ Сообщение отправлено на проверку. После одобрения оно будет доставлено в приложение.');
 
     // Отправляем Админам на проверку
     const adminText =
@@ -177,10 +206,14 @@ bot.action(/^approve_(.+)$/, async (ctx) => {
     if (!msg) return ctx.answerCbQuery('❌ Уже обработано');
 
     if (supabase) {
-        await supabase.from('order_messages').insert({
-            order_id: msg.orderId, sender_id: msg.senderId,
-            receiver_id: msg.receiverId, text: msg.text, is_approved: true
-        }).catch(() => { });
+        try {
+            await supabase.from('order_messages').insert({
+                order_id: msg.orderId, sender_id: msg.senderId,
+                receiver_id: msg.receiverId, text: msg.text, is_approved: true
+            });
+        } catch (err) {
+            console.error('Ошибка сохранения после одобрения:', err.message);
+        }
     }
     if (msg.receiverTgChatId) {
         await bot.telegram.sendMessage(msg.receiverTgChatId, `📨 Сообщение от ${msg.senderName}:\n\n${msg.text}`).catch(() => { });
@@ -234,5 +267,5 @@ bot.launch()
         process.exit(1);
     });
 
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGINT', () => { try { bot.stop('SIGINT') } catch (e) { } });
+process.once('SIGTERM', () => { try { bot.stop('SIGTERM') } catch (e) { } });

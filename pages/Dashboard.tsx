@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { User, UserRole, Order, OrderStatus, Review, Location, Notification } from '../types';
+import { User, UserRole, Order, OrderStatus, Review, Location, Notification, OrderMessage } from '../types';
 import { SERVICE_TYPES } from '../constants';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -133,6 +133,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
 
   const [orders, setOrders] = useState<Order[]>([]);
+  const [orderMessages, setOrderMessages] = useState<Record<string, OrderMessage[]>>({});
   const [expandedHistoryItems, setExpandedHistoryItems] = useState<Set<string>>(new Set());
   const [isOrdersLoading, setIsOrdersLoading] = useState(true);
   const [realRatings, setRealRatings] = useState<Record<string, string>>({});
@@ -1169,10 +1170,44 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
         if (!isActive) return;
         if (!Array.isArray(data)) {
           setOrders([]);
+          setOrderMessages({});
           if (!isBackground) setIsOrdersLoading(false);
           return;
         }
         setOrders(data.map(orderRowToOrder));
+
+        // Fetch messages for these orders
+        const orderIds = data.map(o => o.id);
+        if (orderIds.length > 0) {
+          const { data: msgsData } = await supabase
+            .from('order_messages')
+            .select('*')
+            .in('order_id', orderIds)
+            .eq('is_approved', true) // only fetch approved
+            .order('created_at', { ascending: true })
+            .abortSignal(signal || new AbortController().signal);
+
+          if (msgsData && Array.isArray(msgsData)) {
+            const groupedMsgs: Record<string, OrderMessage[]> = {};
+            msgsData.forEach(msg => {
+              const mappedMsg: OrderMessage = {
+                id: msg.id,
+                orderId: msg.order_id,
+                senderId: msg.sender_id,
+                receiverId: msg.receiver_id,
+                text: msg.text,
+                createdAt: msg.created_at,
+                isApproved: msg.is_approved
+              };
+              if (!groupedMsgs[msg.order_id]) groupedMsgs[msg.order_id] = [];
+              groupedMsgs[msg.order_id].push(mappedMsg);
+            });
+            setOrderMessages(groupedMsgs);
+          }
+        } else {
+          setOrderMessages({});
+        }
+
         if (!isBackground) setIsOrdersLoading(false);
       } catch (err: any) {
         const isAbort = err.name === 'AbortError' ||
@@ -1287,6 +1322,39 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
       )
       .subscribe();
 
+    // Подписка на изменения в реальном времени для СООБЩЕНИЙ
+    const messagesChannel = supabase
+      .channel('realtime-messages')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'order_messages' },
+        (payload) => {
+          if (!isActive) return;
+          const msg = payload.new;
+          if (msg.is_approved) {
+            const mappedMsg: OrderMessage = {
+              id: msg.id,
+              orderId: msg.order_id,
+              senderId: msg.sender_id,
+              receiverId: msg.receiver_id,
+              text: msg.text,
+              createdAt: msg.created_at,
+              isApproved: msg.is_approved
+            };
+            setOrderMessages(prev => {
+              const grouped = { ...prev };
+              if (!grouped[msg.order_id]) grouped[msg.order_id] = [];
+              // check if already exists
+              if (!grouped[msg.order_id].some(m => m.id === mappedMsg.id)) {
+                grouped[msg.order_id] = [...grouped[msg.order_id], mappedMsg];
+              }
+              return grouped;
+            });
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       isActive = false;
       controller.abort();
@@ -1294,6 +1362,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
       clearInterval(intervalId);
       supabase.removeChannel(channel);
       supabase.removeChannel(profilesChannel);
+      supabase.removeChannel(messagesChannel);
     };
   }, [user.id, user.role]);
 
@@ -3034,7 +3103,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                       (!customer.subscriptionStatus || customer.subscriptionStatus === 'none');
 
                                     const BOT_USERNAME = 'NoBarriers_BOT';
-                                    const chatLink = `https://t.me/${BOT_USERNAME}?start=chat_${order.id}_to_${customer.id}`;
+                                    const chatLink = `https://t.me/${BOT_USERNAME}?start=chat_${order.id.replace(/-/g, '')}_e`;
 
                                     return (
                                       <div className="w-full mt-4 p-3 sm:p-4 bg-white/5 rounded-2xl border border-white/10">
@@ -3122,7 +3191,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                     if (!executor) return null;
 
                                     const BOT_USERNAME = 'NoBarriers_BOT';
-                                    const chatLink = `https://t.me/${BOT_USERNAME}?start=chat_${order.id}_to_${executor.id}`;
+                                    const chatLink = `https://t.me/${BOT_USERNAME}?start=chat_${order.id.replace(/-/g, '')}_c`;
 
                                     return (
                                       <div className="w-full mt-4 p-4 bg-white/5 rounded-2xl border border-white/10 animate-in fade-in duration-500">
@@ -3217,6 +3286,35 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                             >
                                               Выбрать
                                             </button>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Order Messages Feed */}
+                                {orderMessages[order.id] && orderMessages[order.id].length > 0 && (
+                                  <div className="w-full mt-4 p-4 bg-white/5 rounded-2xl border border-white/10">
+                                    <h5 className="font-bold text-sm text-slate-300 mb-3 flex items-center gap-2">
+                                      <i className="fas fa-comments text-careem-primary"></i> Сообщения по заказу
+                                    </h5>
+                                    <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                      {orderMessages[order.id].map(msg => {
+                                        const isMine = msg.senderId === user.id;
+                                        const sender = allUsers.find(u => u.id === msg.senderId);
+                                        return (
+                                          <div key={msg.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+                                            <div className="flex items-center gap-2 mb-1">
+                                              {!isMine && (
+                                                <img src={sender?.avatar || `https://ui-avatars.com/api/?name=${sender?.name || 'User'}`} alt="avatar" className="w-5 h-5 rounded-full" />
+                                              )}
+                                              <span className="text-[10px] text-zinc-400 font-bold">{isMine ? 'Вы' : sender?.name || 'Пользователь'}</span>
+                                              <span className="text-[9px] text-zinc-500">{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                            </div>
+                                            <div className={`px-3 py-2 rounded-2xl text-sm max-w-[85%] ${isMine ? 'bg-[#2D6BFF] text-white rounded-tr-sm' : 'bg-white/10 text-slate-200 rounded-tl-sm'}`}>
+                                              {msg.text}
+                                            </div>
                                           </div>
                                         );
                                       })}

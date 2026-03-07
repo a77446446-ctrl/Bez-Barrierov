@@ -108,3 +108,14 @@ export interface Service {
   read: boolean;
   source: 'WEB' | 'TELEGRAM';
 }
+
+export interface OrderMessage {
+  id: string;
+  orderId: string;
+  senderId: string;
+  receiverId: string;
+  text: string;
+  createdAt: string;
+  isApproved: boolean;
+}
+
