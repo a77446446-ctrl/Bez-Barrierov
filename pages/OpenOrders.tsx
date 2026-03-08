@@ -6,6 +6,7 @@ import { SERVICE_TYPES } from '../constants';
 import OrderMap from '../components/OrderMap';
 import { getSupabase } from '../services/supabaseClient';
 import { profileRowToUser, orderRowToOrder, resolveProfileIdColumn } from '../services/mappers';
+import { Clock3 } from 'lucide-react';
 
 const getOrderDateTimeMs = (order: Order) => {
   if (!order.date || !order.time) return null;
@@ -308,7 +309,13 @@ const OpenOrders: React.FC = () => {
             return (
               <div
                 key={order.id}
-                className="rounded-[2.5rem] border border-white/5 bg-careem-light/40 backdrop-blur-2xl overflow-hidden shadow-2xl group relative text-white"
+                className="overflow-hidden shadow-2xl group relative text-white rounded-2xl"
+                style={{
+                  background: 'rgba(26, 26, 26, 0.5)',
+                  backdropFilter: 'blur(10px)',
+                  WebkitBackdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(255, 255, 255, 0.05)'
+                }}
               >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-careem-primary/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none transition-transform duration-700 group-hover:scale-110"></div>
                 <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none transition-transform duration-700 group-hover:scale-110"></div>
@@ -348,14 +355,14 @@ const OpenOrders: React.FC = () => {
                             {order.time}
                           </span>
                         )}
-                        <span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 backdrop-blur-md px-3 py-1.5 shadow-sm">
-                          <i className="fas fa-ruble-sign text-zinc-400"></i>
-                          {order.totalPrice} ₽
+                        <span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 backdrop-blur-md px-3 py-1.5 shadow-sm text-[#10B981]">
+                          <i className="fas fa-ruble-sign text-[#10B981]"></i>
+                          <span style={{ textShadow: '0 0 8px rgba(16,185,129,0.35)' }}>{order.totalPrice} ₽</span>
                         </span>
                       </div>
                     </div>
                     <div className="shrink-0 inline-flex items-center gap-2 rounded-xl border border-careem-primary/30 bg-careem-primary/15 text-careem-primary px-3.5 py-2 text-[11px] font-bold shadow-inner">
-                      <i className="fas fa-circle text-[8px] drop-shadow-[0_0_5px_rgba(37,99,235,0.8)]"></i>
+                      <Clock3 size={14} className="drop-shadow-[0_0_5px_rgba(37,99,235,0.8)]" />
                       Свободен
                     </div>
                   </div>
@@ -416,7 +423,8 @@ const OpenOrders: React.FC = () => {
           onClick={() => setSelectedOrderDetails(null)}
         >
           <div
-            className="bg-careem-light border border-white/10 rounded-[2rem] max-w-2xl w-full shadow-2xl shadow-black overflow-hidden flex flex-col max-h-[90vh] md:max-h-[85vh] animate-in zoom-in-95 duration-200 relative text-white"
+            className="max-w-2xl w-full shadow-2xl shadow-black overflow-hidden flex flex-col max-h-[90vh] md:max-h-[85vh] animate-in zoom-in-95 duration-200 relative text-white rounded-2xl"
+            style={{ background: '#1A1A1A', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.05)' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-5 border-b border-white/5 flex justify-between items-center bg-black/20 shrink-0">
@@ -441,7 +449,7 @@ const OpenOrders: React.FC = () => {
                 <div className="sm:text-right">
                   <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mb-1.5">Статус</p>
                   <div className="inline-flex items-center gap-2 rounded-xl border border-careem-primary/30 bg-careem-primary/10 px-3 py-1.5 text-xs font-bold text-careem-primary">
-                    <i className="fas fa-circle text-[8px] drop-shadow-[0_0_5px_rgba(37,99,235,0.8)]"></i>
+                    <Clock3 size={14} className="drop-shadow-[0_0_5px_rgba(37,99,235,0.8)]" />
                     Свободен
                   </div>
                 </div>
@@ -572,7 +580,11 @@ const OpenOrders: React.FC = () => {
                   handleTakeOpenOrder(selectedOrderDetails.id);
                   setSelectedOrderDetails(null);
                 }}
-                className="w-full bg-careem-primary text-white font-medium py-4 px-6 rounded-2xl hover:bg-careem-accent transition shadow-lg shadow-careem-primary/25 text-base"
+                className="w-full text-white font-medium py-4 px-6 rounded-2xl transition text-base"
+                style={{
+                  background: 'linear-gradient(135deg, #3B82F6 0%, #1E3A8A 100%)',
+                  boxShadow: '0 10px 30px rgba(59,130,246,0.35)'
+                }}
               >
                 Взять в работу
               </button>

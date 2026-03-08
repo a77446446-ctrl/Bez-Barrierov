@@ -4,6 +4,7 @@ import { UserRole, Order, OrderStatus } from '../types';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getSupabase } from '../services/supabaseClient';
+import { LayoutGrid, UserCircle, ClipboardList, LogIn } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -286,7 +287,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </div>
               </aside>
 
-              <nav className="md:hidden fixed bottom-0 inset-x-0 z-[160] border-t border-white/5 bg-careem-dark/70 backdrop-blur-2xl saturate-150 pb-safe">
+              <nav
+                className="md:hidden fixed bottom-0 inset-x-0 z-[160] pb-safe"
+                style={{
+                  background: 'rgba(18, 18, 18, 0.7)',
+                  backdropFilter: 'blur(15px)',
+                  WebkitBackdropFilter: 'blur(15px)',
+                  borderTop: '1px solid rgba(255, 255, 255, 0.08)'
+                }}
+              >
                 <div className="px-3 py-2 grid grid-cols-2 gap-2 w-full max-w-md mx-auto relative">
                   {navItems.map((item) => (
                     <Link
@@ -294,15 +303,26 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       to={item.to}
                       className={[
                         'flex flex-col items-center justify-center gap-1.5 rounded-2xl px-2 py-2.5 text-[11px] font-medium transition-all relative',
-                        item.isActive
-                          ? 'text-careem-primary'
-                          : 'text-zinc-500 hover:text-zinc-300'
+                        item.isActive ? 'text-[#3B82F6]' : 'text-zinc-500 hover:text-zinc-300'
                       ].join(' ')}
                     >
                       {item.isActive && (
-                        <div className="absolute inset-0 bg-careem-primary/10 rounded-2xl"></div>
+                        <div className="absolute inset-0 rounded-2xl" style={{ boxShadow: '0 6px 18px rgba(59,130,246,0.25)' }}></div>
                       )}
-                      <i className={`fas ${item.icon} text-[20px] mb-0.5 z-10 transition-transform ${item.isActive ? 'drop-shadow-[0_0_8px_rgba(37,99,235,0.6)] scale-110' : ''}`}></i>
+                      <span className="z-10">
+                        {(() => {
+                          if (item.label === 'Главная') {
+                            return <LayoutGrid size={20} color={item.isActive ? '#3B82F6' : '#9ca3af'} style={item.isActive ? { filter: 'drop-shadow(0 0 8px rgba(59,130,246,0.6))' } : undefined} />;
+                          }
+                          if (item.label === 'Мой кабинет') {
+                            if (!user) {
+                              return <LogIn size={20} color={item.isActive ? '#3B82F6' : '#9ca3af'} style={item.isActive ? { filter: 'drop-shadow(0 0 8px rgba(59,130,246,0.6))' } : undefined} />;
+                            }
+                            return <UserCircle size={20} color={item.isActive ? '#3B82F6' : '#9ca3af'} style={item.isActive ? { filter: 'drop-shadow(0 0 8px rgba(59,130,246,0.6))' } : undefined} />;
+                          }
+                          return <LayoutGrid size={20} color={item.isActive ? '#3B82F6' : '#9ca3af'} />;
+                        })()}
+                      </span>
                       <span className="whitespace-nowrap z-10 tracking-wide">{item.label}</span>
                       {item.label === 'Настройки' &&
                         user?.role === UserRole.EXECUTOR &&

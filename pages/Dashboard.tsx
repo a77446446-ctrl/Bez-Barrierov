@@ -10,6 +10,7 @@ import OrderMap from '../components/OrderMap';
 import { getSupabase } from '../services/supabaseClient';
 import { profileRowToUser, userToProfileUpdate, orderRowToOrder, resolveProfileIdColumn } from '../services/mappers';
 import { toast } from 'react-hot-toast';
+import { CheckCircle2, AlertTriangle, Clock3, Crown } from 'lucide-react';
 
 // OrderMap component removed (imported from components/OrderMap)
 
@@ -2818,44 +2819,42 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                       const customer = allUsers.find(u => u.id === user.subscribedToCustomerId);
 
                       return (
-                        <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 w-full text-center relative overflow-hidden animate-in slide-in-from-bottom-4">
-                          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-yellow-400 to-yellow-600"></div>
+                        <div className="p-8 rounded-[20px] shadow-2xl border border-[#D4AF37]/30 w-full text-center relative overflow-hidden animate-in slide-in-from-bottom-4" style={{ background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(26, 26, 26, 0.8) 100%)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+                          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#FFDF00] via-[#D4AF37] to-[#B8860B]"></div>
 
-                          <div className="w-24 h-24 bg-yellow-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
-                            <i className="fas fa-crown text-4xl text-yellow-500"></i>
+                          <div className="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(212,175,55,0.3)] border border-[#D4AF37]/40" style={{ background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(0, 0, 0, 0.4) 100%)' }}>
+                            <Crown size={48} color="#FFDF00" style={{ filter: 'drop-shadow(0 0 10px rgba(255,223,0,0.6))' }} />
                           </div>
 
-                          <h2 className="text-2xl font-black text-gray-900 mb-2">Подписка активна</h2>
-                          <p className="text-gray-500 mb-8">Вы успешно подписаны на заказчика. Доступ к общей ленте заказов ограничен.</p>
+                          <h2 className="text-2xl font-black text-white mb-2 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">Подписка активна</h2>
+                          <p className="text-white/60 mb-8">Вы успешно подписаны на заказчика. Доступ к общей ленте заказов ограничен.</p>
 
                           {customer && (
-                            <div
-                              className="bg-white rounded-2xl p-5 border border-yellow-400 mb-8 max-w-md mx-auto shadow-sm relative overflow-hidden transition"
-                            >
-                              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Ваш заказчик</p>
+                            <div className="rounded-[16px] p-6 border border-white/10 mb-8 max-w-md mx-auto shadow-sm" style={{ background: 'rgba(0, 0, 0, 0.3)' }}>
+                              <p className="text-xs font-bold text-white/50 uppercase tracking-widest drop-shadow-sm mb-3">Ваш заказчик</p>
                               <div className="flex items-center gap-4 justify-center mb-6">
                                 <div className="relative">
                                   <img
-                                    src={customer.avatar || `https://ui-avatars.com/api/?name=${customer.name}`}
+                                    src={customer.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(customer.name)}&background=3B82F6&color=fff`}
                                     alt={customer.name}
-                                    className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-md"
+                                    className="w-14 h-14 rounded-full object-cover border-2 border-white/10 shadow-md"
                                   />
-                                  <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
+                                  <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#10B981] rounded-full border-2 border-[#1A1A1A] flex items-center justify-center">
                                     <i className="fas fa-check text-[8px] text-white"></i>
                                   </div>
                                 </div>
                                 <div className="text-left">
-                                  <h4 className="font-bold text-gray-900 text-lg leading-tight">{customer.name}</h4>
-                                  <p className="text-xs text-gray-500 font-medium">Персональная подписка</p>
+                                  <h4 className="font-bold text-white text-lg leading-tight drop-shadow-sm">{customer.name}</h4>
+                                  <p className="text-xs text-[#D4AF37] font-medium">Персональная подписка</p>
                                 </div>
                               </div>
 
-                              <div className="pt-4 border-t border-gray-100">
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Истекает через</p>
-                                <div className="text-3xl font-black text-careem-primary mb-1">
-                                  {daysLeft} <span className="text-sm text-gray-400 font-medium">дней</span>
+                              <div className="pt-4 border-t border-white/10">
+                                <p className="text-xs font-bold text-white/50 uppercase tracking-widest drop-shadow-sm mb-2">Истекает через</p>
+                                <div className="text-3xl font-black text-[#D4AF37] mb-1 drop-shadow-[0_0_8px_rgba(212,175,55,0.5)]">
+                                  {daysLeft} <span className="text-sm text-white/40 font-medium tracking-normal">дней</span>
                                 </div>
-                                <p className="text-[10px] text-gray-400">Дата окончания: {endDate.toLocaleDateString()}</p>
+                                <p className="text-[10px] text-white/40">Дата окончания: {endDate.toLocaleDateString()}</p>
                               </div>
                             </div>
                           )}
@@ -2863,7 +2862,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                           <div className="max-w-md mx-auto mb-6">
                             <button
                               onClick={() => setIsCancelSubscriptionModalOpen(true)}
-                              className="w-full bg-white border-2 border-red-100 text-red-500 font-bold py-3 rounded-xl hover:bg-red-50 transition flex items-center justify-center gap-2"
+                              className="w-full bg-white/5 backdrop-blur-md border border-red-500/20 text-red-400 font-bold py-3 rounded-xl hover:bg-red-500/10 hover:text-red-300 transition flex items-center justify-center gap-2"
                             >
                               <i className="fas fa-times-circle"></i>
                               Отменить подписку
@@ -2872,17 +2871,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
                           {/* Блок информации об отмене подписки */}
                           {user.subscriptionStatus === 'none' && (
-                            <div className="bg-red-50 border border-red-100 rounded-2xl p-4 max-w-md mx-auto mb-6 text-left animate-in fade-in slide-in-from-bottom-2">
+                            <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 max-w-md mx-auto mb-6 text-left animate-in fade-in slide-in-from-bottom-2">
                               <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center text-red-500 flex-shrink-0">
+                                <div className="w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center text-red-400 flex-shrink-0">
                                   <i className="fas fa-ban"></i>
                                 </div>
                                 <div>
-                                  <h4 className="font-bold text-red-800 text-sm mb-1">Подписка отменена</h4>
-                                  <p className="text-xs text-red-600 mb-1">
-                                    <span className="font-semibold">Кем:</span> Вами
+                                  <h4 className="font-bold text-red-400 text-sm mb-1 drop-shadow-sm">Подписка отменена</h4>
+                                  <p className="text-xs text-red-300 mb-1">
+                                    <span className="font-semibold text-white/70">Кем:</span> Вами
                                   </p>
-                                  <p className="text-xs text-red-500">
+                                  <p className="text-xs text-red-400/70">
                                     {new Date().toLocaleString('ru-RU')}
                                   </p>
                                 </div>
@@ -2892,13 +2891,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
                           {daysLeft <= 1 && (
                             <div className="animate-in fade-in slide-in-from-bottom-4 max-w-md mx-auto">
-                              <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm font-bold mb-4 border border-red-100">
+                              <div className="bg-red-500/10 text-red-400 p-3 rounded-xl text-sm font-bold mb-4 border border-red-500/20 drop-shadow-sm">
                                 <i className="fas fa-exclamation-circle mr-2"></i>
                                 Подписка скоро истекает!
                               </div>
                               <button
                                 onClick={handleRenewSubscription}
-                                className="w-full bg-careem-primary/80 text-white font-bold py-3 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-200"
+                                className="w-full bg-gradient-to-r from-[#3B82F6] to-[#2563EB] text-white font-bold py-3 rounded-xl hover:from-[#2563EB] hover:to-[#1D4ED8] transition shadow-[0_4px_20px_rgba(59,130,246,0.4)]"
                               >
                                 Сделать новый запрос заказчику
                               </button>
@@ -2921,31 +2920,31 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                       const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
                       return (
-                        <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 w-full text-center relative overflow-hidden animate-in slide-in-from-bottom-4">
-                          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-400 to-green-600"></div>
+                        <div className="p-8 rounded-[20px] shadow-2xl border border-[#D4AF37]/30 w-full text-center relative overflow-hidden animate-in slide-in-from-bottom-4" style={{ background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(26, 26, 26, 0.8) 100%)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
+                          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#FFDF00] via-[#D4AF37] to-[#B8860B]"></div>
 
-                          <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
-                            <i className="fas fa-crown text-4xl text-green-500"></i>
+                          <div className="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(212,175,55,0.3)] border border-[#D4AF37]/40" style={{ background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(0, 0, 0, 0.4) 100%)' }}>
+                            <Crown size={48} color="#FFDF00" style={{ filter: 'drop-shadow(0 0 10px rgba(255,223,0,0.6))' }} />
                           </div>
 
-                          <h2 className="text-2xl font-black text-gray-900 mb-2">PRO Подписка</h2>
-                          <p className="text-gray-500 mb-6">Активна до {endDate.toLocaleDateString()}</p>
+                          <h2 className="text-2xl font-black text-white mb-2 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">PRO Подписка</h2>
+                          <p className="text-white/60 mb-6">Активна до {endDate.toLocaleDateString()}</p>
 
-                          <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 mb-8 max-w-md mx-auto shadow-sm">
+                          <div className="rounded-[16px] p-6 border border-white/10 mb-8 max-w-md mx-auto shadow-sm" style={{ background: 'rgba(0, 0, 0, 0.3)' }}>
                             <div className="flex flex-col items-center justify-center gap-3 mb-4">
-                              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Ваш личный помощник</p>
-                              <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-xl border border-gray-200 shadow-sm">
-                                {executor?.avatar && <img src={executor.avatar} alt={executor.name} className="w-10 h-10 rounded-full object-cover border border-gray-100" />}
-                                <div className="text-xl font-bold text-gray-900">{executor?.name || 'Имя скрыто'}</div>
+                              <p className="text-xs font-bold text-white/50 uppercase tracking-widest drop-shadow-sm">Ваш личный помощник</p>
+                              <div className="flex items-center gap-3 bg-white/5 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/10 shadow-sm">
+                                {executor?.avatar && <img src={executor.avatar} alt={executor.name} className="w-10 h-10 rounded-full object-cover border border-white/10" />}
+                                <div className="text-xl font-bold text-white">{executor?.name || 'Имя скрыто'}</div>
                               </div>
                             </div>
-                            <p className="text-sm text-gray-500 leading-relaxed">Вам помогает профессиональный ассистент. <br /> Осталось <span className="font-bold text-careem-primary text-lg">{daysLeft}</span> дней.</p>
+                            <p className="text-sm text-white/50 leading-relaxed">Вам помогает профессиональный ассистент. <br /> Осталось <span className="font-bold text-[#D4AF37] text-lg drop-shadow-[0_0_8px_rgba(212,175,55,0.5)]">{daysLeft}</span> дней.</p>
                           </div>
 
                           <div className="max-w-md mx-auto">
                             <button
                               onClick={() => setIsCancelSubscriptionModalOpen(true)}
-                              className="w-full bg-white border-2 border-red-100 text-red-500 font-bold py-3 rounded-xl hover:bg-red-50 transition flex items-center justify-center gap-2"
+                              className="w-full bg-white/5 backdrop-blur-md border border-red-500/20 text-red-400 font-bold py-3 rounded-xl hover:bg-red-500/10 hover:text-red-300 transition flex items-center justify-center gap-2"
                             >
                               <i className="fas fa-times-circle"></i>
                               Отменить подписку
@@ -2958,12 +2957,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                     <div className="grid grid-cols-1 gap-4">
                       {/* Active Orders */}
                       {activeOrders.map(order => (
-                        <div key={order.id} className="p-0 rounded-3xl shadow-[0_0_40px_rgba(45,107,255,0.4)] border-0 overflow-hidden transition duration-300 backdrop-blur-xl hover:shadow-[0_0_60px_rgba(45,107,255,0.6)]">
+                        <div key={order.id} className="p-0 rounded-[16px] border-0 overflow-hidden transition duration-300 hover:shadow-[0_0_30px_rgba(59,130,246,0.3)]">
                           {/* Inner Card Container with Inner Shadow */}
-                          <div className="m-0 p-6 rounded-3xl relative overflow-hidden group transition-all duration-300 bg-gradient-to-br from-careem-dark to-[#003822] border border-careem-dark/50 shadow-xl text-white">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-green-400/20 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-                            <div className="absolute bottom-0 left-0 w-24 h-24 bg-careem-accent/10 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none"></div>
-                            <i className="fas fa-hand-holding-heart absolute -bottom-6 -right-6 text-[9rem] opacity-5 transform rotate-12 group-hover:rotate-0 group-hover:scale-110 transition duration-700 ease-out pointer-events-none"></i>
+                          <div className="m-0 p-6 rounded-[16px] relative overflow-hidden group transition-all duration-300 text-white" style={{ background: 'rgba(26, 26, 26, 0.5)', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-[#3B82F6]/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+                            <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#3B82F6]/5 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none"></div>
                             {(() => {
                               const info = getServiceHeaderInfo(order.serviceType);
                               return info && (
@@ -2976,7 +2974,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                     backgroundPosition: 'center',
                                     maskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
                                     WebkitMaskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
-                                    filter: 'brightness(0.8)'
+                                    filter: 'brightness(0.3)'
                                   }}
                                 />
                               );
@@ -2987,11 +2985,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                               <div className="flex justify-end mb-2">
                                 <span
                                   className={[
-                                    'text-[9px] leading-none font-black uppercase tracking-wide whitespace-nowrap drop-shadow-[0_6px_18px_rgba(0,0,0,0.55)]',
+                                    'text-[10px] flex items-center gap-1.5 leading-none font-bold uppercase tracking-wider whitespace-nowrap drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]',
                                     getStatusColor(order.status),
-                                    order.status === OrderStatus.PENDING ? 'animate-pulse' : ''
+                                    order.status === OrderStatus.PENDING ? 'animate-pulse text-yellow-400' : ''
                                   ].join(' ')}
                                 >
+                                  {order.status === OrderStatus.PENDING && <Clock3 size={12} />}
+                                  {order.status === OrderStatus.CONFIRMED && <CheckCircle2 size={12} />}
+                                  {(order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REJECTED) && <AlertTriangle size={12} />}
+                                  {order.status === OrderStatus.OPEN && <Clock3 size={12} />}
+                                  {order.status === OrderStatus.COMPLETED && <CheckCircle2 size={12} />}
                                   {getStatusLabel(order.status)}
                                 </span>
                               </div>
@@ -3001,21 +3004,21 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                 {/* Яркая иконка рука с сердцем — на одной плоскости с заголовком */}
                                 <i className="fas fa-hand-holding-heart text-2xl text-[#FF6B6B] drop-shadow-[0_0_8px_rgba(255,107,107,0.7)] shrink-0"></i>
                                 <div className="flex-grow min-w-0">
-                                  <h4 className="font-extrabold text-white text-base sm:text-lg leading-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] truncate">
+                                  <h4 className="font-bold text-white text-[19px] sm:text-[21px] leading-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] truncate">
                                     {order.serviceType}
                                   </h4>
-                                  <p className="text-xs font-medium text-white/90 mt-1 flex items-center gap-2 flex-wrap drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-                                    <span className="bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded border border-white/20 font-bold">{order.date}</span>
-                                    <span className="bg-black/40 backdrop-blur-sm px-2 py-0.5 rounded border border-white/20 font-bold">{order.time}</span>
+                                  <p className="text-xs font-medium text-white/90 mt-1 flex items-center gap-2 flex-wrap drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+                                    <span className="bg-black/50 backdrop-blur-md px-2.5 py-1 rounded border border-white/10 font-bold">{order.date}</span>
+                                    <span className="bg-black/50 backdrop-blur-md px-2.5 py-1 rounded border border-white/10 font-bold">{order.time}</span>
                                   </p>
                                 </div>
                               </div>
 
                               {/* Body: Price & Info */}
-                              <div className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/10">
+                              <div className="flex items-center justify-between rounded-[12px] p-4" style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
                                 <div>
                                   <p className="text-[10px] uppercase text-slate-400 font-bold mb-1 tracking-wider">Стоимость услуги</p>
-                                  <p className="text-2xl font-black text-slate-100">{order.totalPrice} <span className="text-sm font-medium text-slate-400">₽</span></p>
+                                  <p className="text-[26px] font-black" style={{ color: '#10B981', textShadow: '0 0 15px rgba(16,185,129,0.4)' }}>{order.totalPrice} <span className="text-sm font-medium opacity-80">₽</span></p>
                                 </div>
                                 <div className="h-8 w-px bg-white/10 mx-4"></div>
                                 <div className="text-right">
@@ -3097,10 +3100,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                     const customer = allUsers.find(u => u.id === order.customerId);
                                     if (!customer) return null;
 
-                                    // Подписка доступна только для прямых (персональных) заказов.
-                                    const isDirectOrder = !!(order as any).isDirectOrder;
-                                    const canRequestSubscription = isDirectOrder &&
-                                      (!customer.subscriptionStatus || customer.subscriptionStatus === 'none');
+                                    const canRequestSubscription = order.executorId === user.id && order.status !== OrderStatus.OPEN;
 
                                     const BOT_USERNAME = 'NoBarriers_BOT';
                                     const chatLink = `https://t.me/${BOT_USERNAME}?start=chat_${order.id.replace(/-/g, '')}_e`;
@@ -3131,10 +3131,19 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide mb-0.5">Заказчик</p>
                                             <h4 className="font-bold text-slate-100 text-sm truncate">{customer.name}</h4>
                                             {canRequestSubscription && (
-                                              <div className="mt-1 inline-flex items-center gap-1.5 bg-white/5 border border-purple-500/30 px-2 py-0.5 rounded-lg">
-                                                <i className="fas fa-crown text-orange-400 text-[9px] animate-pulse"></i>
-                                                <span className="text-[9px] font-bold text-purple-200">Доступна подписка</span>
-                                              </div>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  if (window.confirm('Вы хотите отправить запрос на подписку этому заказчику?')) {
+                                                    handleSubscribeRequest(customer.id);
+                                                  }
+                                                }}
+                                                className="mt-1.5 inline-flex items-center gap-1.5 bg-gradient-to-r from-orange-400/20 to-orange-500/10 border border-orange-500/40 hover:bg-orange-500/20 hover:border-orange-500/60 transition-all px-2.5 py-1 rounded-lg cursor-pointer shadow-sm active:scale-95 group/sub"
+                                                title="Запросить подписку"
+                                              >
+                                                <i className="fas fa-crown text-orange-400 text-[10px] animate-pulse group-hover/sub:text-orange-300"></i>
+                                                <span className="text-[10px] font-bold text-orange-200 group-hover/sub:text-white">Оформить подписку</span>
+                                              </button>
                                             )}
                                           </div>
 
@@ -3161,7 +3170,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                     <div className="absolute top-0 right-0 w-24 h-24 bg-green-500/10 rounded-full blur-2xl -mr-8 -mt-8"></div>
                                     <div className="relative z-10">
                                       <h5 className="text-green-400 font-bold text-sm mb-2 flex items-center gap-2">
-                                        <i className="fas fa-check-circle"></i> Заказ взят в работу
+                                        <span className="inline-flex"><CheckCircle2 size={14} color="#10B981" /></span> Заказ взят в работу
                                       </h5>
                                       <div className="bg-white/5 rounded-xl p-3 border border-white/10">
                                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide mb-2">Ваши действия:</p>
@@ -3448,16 +3457,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
           {/* Order Details Modal */}
           {selectedOrderDetails && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200 modal-open">
-              <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
-                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200 modal-open">
+              <div className="bg-[#1A1A1A] border border-white/10 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200" style={{ boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)' }}>
+                <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
                   <div>
-                    <h3 className="text-xl font-bold text-gray-900">Детали заказа</h3>
-                    <p className="text-sm text-gray-500 mt-1">{selectedOrderDetails.serviceType}</p>
+                    <h3 className="text-xl font-bold text-white drop-shadow-sm">Детали заказа</h3>
+                    <p className="text-sm text-slate-400 mt-1">{selectedOrderDetails.serviceType}</p>
                   </div>
                   <button
                     onClick={() => setSelectedOrderDetails(null)}
-                    className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition shadow-sm"
+                    className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition shadow-sm"
                   >
                     <i className="fas fa-times"></i>
                   </button>
@@ -3465,13 +3474,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
                 <div className="p-6 overflow-y-auto custom-scrollbar">
                   {/* Status & Price */}
-                  <div className="flex items-center justify-between mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                  <div className="flex items-center justify-between mb-6 bg-white/5 backdrop-blur-sm p-4 rounded-xl border border-white/10">
                     <div>
-                      <p className="text-xs text-careem-primary font-bold uppercase mb-1">Стоимость</p>
-                      <p className="text-2xl font-bold text-careem-dark">{selectedOrderDetails.totalPrice} ₽</p>
+                      <p className="text-[10px] uppercase text-slate-400 font-bold mb-1 tracking-wider">Стоимость</p>
+                      <p className="text-[22px] font-black" style={{ color: '#10B981', textShadow: '0 0 10px rgba(16,185,129,0.3)' }}>{selectedOrderDetails.totalPrice} ₽</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-careem-primary font-bold uppercase mb-1">Статус</p>
+                      <p className="text-[10px] uppercase text-slate-400 font-bold mb-1 tracking-wider">Статус</p>
                       <span
                         className={[
                           'text-[11px] leading-none font-black uppercase tracking-wide whitespace-nowrap',
@@ -3486,17 +3495,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
                   {/* Date & Time */}
                   <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 h-full flex flex-col justify-center">
-                      <p className="text-xs text-gray-400 font-bold uppercase mb-1">Дата</p>
-                      <p className="font-bold text-gray-900 flex items-center gap-2 text-sm whitespace-nowrap overflow-hidden">
-                        <i className="fas fa-calendar-alt text-careem-primary shrink-0"></i>
+                    <div className="p-3 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 h-full flex flex-col justify-center">
+                      <p className="text-[10px] uppercase text-slate-400 font-bold mb-1 tracking-wider">Дата</p>
+                      <p className="font-bold text-white flex items-center gap-2 text-sm whitespace-nowrap overflow-hidden">
+                        <i className="fas fa-calendar-alt text-[#3B82F6] shrink-0"></i>
                         <span className="truncate">{selectedOrderDetails.date}</span>
                       </p>
                     </div>
-                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 h-full flex flex-col justify-center">
-                      <p className="text-xs text-gray-400 font-bold uppercase mb-1">Время</p>
-                      <p className="font-bold text-gray-900 flex items-center gap-2 text-sm whitespace-nowrap overflow-hidden">
-                        <i className="fas fa-clock text-careem-primary shrink-0"></i>
+                    <div className="p-3 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 h-full flex flex-col justify-center">
+                      <p className="text-[10px] uppercase text-slate-400 font-bold mb-1 tracking-wider">Время</p>
+                      <p className="font-bold text-white flex items-center gap-2 text-sm whitespace-nowrap overflow-hidden">
+                        <i className="fas fa-clock text-[#3B82F6] shrink-0"></i>
                         <span className="truncate">{selectedOrderDetails.time}</span>
                       </p>
                     </div>
@@ -3505,8 +3514,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   {/* Description */}
                   {selectedOrderDetails.details && (
                     <div className="mb-6">
-                      <h4 className="text-sm font-bold text-gray-900 mb-2">Описание задачи</h4>
-                      <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-gray-700 text-sm leading-relaxed">
+                      <h4 className="text-sm font-bold text-slate-300 mb-2">Описание задачи</h4>
+                      <div className="bg-white/5 backdrop-blur-sm p-4 rounded-xl border border-white/10 text-slate-200 text-sm leading-relaxed">
                         {selectedOrderDetails.details}
                       </div>
                     </div>
@@ -3514,28 +3523,28 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
                   {/* Route / Address */}
                   <div className="mb-6">
-                    <h4 className="text-sm font-bold text-gray-900 mb-2">Маршрут и адрес</h4>
+                    <h4 className="text-sm font-bold text-slate-300 mb-2">Маршрут и адрес</h4>
                     {selectedOrderDetails.locationFrom && selectedOrderDetails.locationTo ? (
                       <>
                         <div className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                          <div className="bg-gray-50 rounded-xl border border-gray-100 p-3 flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center shrink-0 border border-green-600 shadow-sm">
-                              <span className="font-bold text-green-600 text-xs">A</span>
+                          <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-3 flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center shrink-0 border border-green-500/50 shadow-sm">
+                              <span className="font-bold text-green-400 text-xs drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]">A</span>
                             </div>
                             <div>
-                              <p className="text-[11px] font-bold uppercase text-gray-400 mb-1">Откуда</p>
-                              <p className="text-gray-800 leading-tight">
+                              <p className="text-[10px] uppercase text-slate-400 font-bold mb-1 tracking-wider">Откуда</p>
+                              <p className="text-slate-200 leading-tight">
                                 {formatAddress(selectedOrderDetails.locationFrom.address)}
                               </p>
                             </div>
                           </div>
-                          <div className="bg-gray-50 rounded-xl border border-gray-100 p-3 flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center shrink-0 border border-red-600 shadow-sm">
-                              <span className="font-bold text-red-600 text-xs">B</span>
+                          <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-3 flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center shrink-0 border border-red-500/50 shadow-sm">
+                              <span className="font-bold text-red-500 text-xs drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]">B</span>
                             </div>
                             <div>
-                              <p className="text-[11px] font-bold uppercase text-gray-400 mb-1">Куда</p>
-                              <p className="text-gray-800 leading-tight">
+                              <p className="text-[10px] uppercase text-slate-400 font-bold mb-1 tracking-wider">Куда</p>
+                              <p className="text-slate-200 leading-tight">
                                 {formatAddress(selectedOrderDetails.locationTo.address)}
                               </p>
                             </div>
@@ -3545,11 +3554,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                       </>
                     ) : selectedOrderDetails.generalLocation ? (
                       <>
-                        <div className="mb-3 bg-gray-50 rounded-xl border border-gray-100 p-3 text-sm flex items-start gap-3">
-                          <i className="fas fa-map-marker-alt text-red-500 mt-1 shrink-0 text-lg"></i>
+                        <div className="mb-3 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-3 text-sm flex items-start gap-3">
+                          <i className="fas fa-map-marker-alt text-red-500 mt-1 shrink-0 text-lg drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]"></i>
                           <div>
-                            <p className="text-[11px] font-bold uppercase text-gray-400 mb-1">Адрес</p>
-                            <p className="text-gray-800">
+                            <p className="text-[10px] uppercase text-slate-400 font-bold mb-1 tracking-wider">Адрес</p>
+                            <p className="text-slate-200">
                               {formatAddress(selectedOrderDetails.generalLocation.address)}
                             </p>
                           </div>
@@ -3557,16 +3566,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                         <OrderMap order={selectedOrderDetails} hideInfo />
                       </>
                     ) : (
-                      <p className="text-sm text-gray-400 italic">Адрес уточняется у заказчика</p>
+                      <p className="text-sm text-slate-500 italic">Адрес уточняется у заказчика</p>
                     )}
                   </div>
                 </div>
 
                 {user.role !== UserRole.CUSTOMER && (
-                  <div className="p-6 border-t border-gray-100 bg-gray-50">
+                  <div className="p-6 border-t border-white/5 bg-white/[0.02]">
                     <button
                       onClick={() => setSelectedOrderDetails(null)}
-                      className="w-full bg-careem-primary/80 text-white font-bold py-3 rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-100"
+                      className="w-full bg-gradient-to-r from-[#3B82F6] to-[#2563EB] text-white font-bold py-3 rounded-xl hover:from-[#2563EB] hover:to-[#1D4ED8] transition shadow-[0_4px_20px_rgba(59,130,246,0.4)]"
                     >
                       Закрыть
                     </button>
@@ -3578,11 +3587,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
           {/* Rejection Modal */}
           {rejectingOrderId && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[200] p-4 modal-open">
-              <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Укажите причину отказа</h3>
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[200] p-4 modal-open">
+              <div className="bg-[#1A1A1A] border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7)]">
+                <h3 className="text-lg font-bold text-white mb-4 drop-shadow-sm">Укажите причину отказа</h3>
                 <textarea
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-careem-primary mb-4 h-32 resize-none text-gray-900 placeholder-gray-400"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl p-4 focus:ring-2 focus:ring-red-500/50 focus:border-red-500/30 mb-4 h-32 resize-none text-white placeholder-slate-500 outline-none"
                   placeholder="Например: занят в это время, не оказываю данную услугу..."
                   value={rejectionReason}
                   onChange={(e) => setRejectionReason(e.target.value)}
@@ -3594,14 +3603,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                       setRejectingOrderId(null);
                       setRejectionReason('');
                     }}
-                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                    className="px-4 py-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition"
                   >
                     Отмена
                   </button>
                   <button
                     onClick={handleRejectOrder}
                     disabled={!rejectionReason.trim()}
-                    className="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white font-bold rounded-lg hover:from-red-500 hover:to-red-600 transition shadow-[0_4px_20px_rgba(220,38,38,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Отклонить заказ
                   </button>
@@ -3612,14 +3621,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
           {/* Completion & Review Modal */}
           {completingOrderId && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200 modal-open">
-              <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl scale-100">
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200 modal-open">
+              <div className="bg-[#1A1A1A] border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7)] scale-100">
                 <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-600 mx-auto mb-4">
-                    <i className="fas fa-check text-2xl"></i>
+                  <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 mx-auto mb-4 border border-green-500/30 shadow-[0_0_20px_rgba(74,222,128,0.2)]">
+                    <i className="fas fa-check text-2xl drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]"></i>
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900">Заказ выполнен!</h3>
-                  <p className="text-sm text-gray-500 mt-1">Пожалуйста, оцените работу помощника</p>
+                  <h3 className="text-xl font-bold text-white drop-shadow-sm">Заказ выполнен!</h3>
+                  <p className="text-sm text-slate-400 mt-1">Пожалуйста, оцените работу помощника</p>
                 </div>
 
                 <div className="mb-6">
@@ -3629,7 +3638,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                         key={star}
                         type="button"
                         onClick={() => setReviewRating(star)}
-                        className={`text-3xl transition ${star <= reviewRating ? 'text-yellow-400 scale-110' : 'text-gray-300 hover:text-yellow-200'}`}
+                        className={`text-3xl transition drop-shadow-lg ${star <= reviewRating ? 'text-[#3B82F6] scale-110 drop-shadow-[0_0_12px_rgba(59,130,246,0.6)]' : 'text-slate-600 hover:text-slate-400'}`}
                       >
                         ★
                       </button>
@@ -3637,7 +3646,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   </div>
 
                   <textarea
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-green-500 min-h-[100px] resize-none text-sm text-gray-900 placeholder-gray-400"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-4 focus:ring-2 focus:ring-[#3B82F6]/50 mb-4 min-h-[100px] resize-none text-sm text-white placeholder-slate-500 outline-none"
                     placeholder="Напишите пару слов о работе специалиста..."
                     value={reviewText}
                     onChange={(e) => setReviewText(e.target.value)}
@@ -3651,13 +3660,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                       setReviewRating(5);
                       setReviewText('');
                     }}
-                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                    className="px-4 py-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition"
                   >
                     Позже
                   </button>
                   <button
                     onClick={handleCompleteOrder}
-                    className="px-6 py-2 bg-careem-primary/80 text-white font-bold rounded-lg hover:bg-green-700 transition shadow-lg shadow-green-200"
+                    className="px-6 py-2 bg-gradient-to-r from-[#3B82F6] to-[#2563EB] text-white font-bold rounded-lg hover:from-[#2563EB] hover:to-[#1D4ED8] transition shadow-[0_4px_20px_rgba(59,130,246,0.4)]"
                   >
                     Отправить отзыв
                   </button>
@@ -3668,27 +3677,27 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
           {/* Customer / User Profile Info Modal */}
           {viewingCustomer && (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200 modal-open">
-              <div className="bg-[#0D1626] rounded-3xl max-w-sm w-full shadow-2xl border border-white/10 overflow-hidden relative animate-in zoom-in-95 duration-200">
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200 modal-open">
+              <div className="bg-[#1A1A1A] rounded-3xl max-w-sm w-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7)] border border-white/10 overflow-hidden relative animate-in zoom-in-95 duration-200">
 
                 {/* Кнопка закрытия */}
                 <button
                   onClick={() => setViewingCustomer(null)}
-                  className="absolute top-4 right-4 w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 transition flex items-center justify-center text-slate-300 z-10"
+                  className="absolute top-4 right-4 w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 transition flex items-center justify-center text-slate-400 hover:text-white z-10"
                 >
                   <i className="fas fa-times text-sm"></i>
                 </button>
 
                 {/* Шапка с градиентом */}
                 <div className="relative">
-                  <div className="h-24 bg-gradient-to-br from-[#1B2D4F] to-[#0D1626] overflow-hidden">
-                    <div className="absolute top-0 right-0 w-40 h-40 bg-careem-primary/10 rounded-full blur-3xl pointer-events-none"></div>
+                  <div className="h-24 overflow-hidden relative" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(26, 26, 26, 0) 100%)' }}>
+                    <div className="absolute top-0 right-0 w-40 h-40 bg-[#3B82F6]/20 rounded-full blur-3xl pointer-events-none"></div>
                   </div>
                   {/* Аватар поверх шапки */}
                   <div className="absolute left-1/2 -translate-x-1/2 bottom-0 translate-y-1/2">
-                    <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-[#0D1626] shadow-xl">
+                    <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-[#1A1A1A] shadow-[0_0_20px_rgba(59,130,246,0.2)]">
                       <img
-                        src={viewingCustomer.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(viewingCustomer.name)}&background=1B2D4F&color=fff`}
+                        src={viewingCustomer.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(viewingCustomer.name)}&background=3B82F6&color=fff`}
                         alt={viewingCustomer.name}
                         className="w-full h-full object-cover"
                       />
@@ -3700,39 +3709,39 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 <div className="pt-16 px-5 pb-6">
                   {/* Имя и роль */}
                   <div className="text-center mb-5">
-                    <h3 className="text-xl font-extrabold text-slate-100">{viewingCustomer.name}</h3>
-                    <span className="inline-flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-white/5 border border-white/10 text-slate-300">
-                      <i className="fas fa-wheelchair text-careem-primary text-[10px]"></i>
+                    <h3 className="text-xl font-extrabold text-white drop-shadow-sm">{viewingCustomer.name}</h3>
+                    <span className="inline-flex items-center gap-1.5 mt-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-[#3B82F6]/10 border border-[#3B82F6]/20 text-[#3B82F6]">
+                      <i className="fas fa-wheelchair text-[10px]"></i>
                       Заказчик
                     </span>
                   </div>
 
                   {/* Описание */}
                   {viewingCustomer.description && (
-                    <div className="mb-3 p-3 bg-white/5 rounded-2xl border border-white/10">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">О себе</p>
-                      <p className="text-sm text-slate-300 leading-relaxed">{viewingCustomer.description}</p>
+                    <div className="mb-3 p-3 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">О себе</p>
+                      <p className="text-sm text-slate-200 leading-relaxed">{viewingCustomer.description}</p>
                     </div>
                   )}
 
                   {/* Информационные поля */}
                   <div className="space-y-2">
                     {viewingCustomer.location && (
-                      <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10">
-                        <i className="fas fa-map-marker-alt text-careem-primary w-4 text-center shrink-0"></i>
+                      <div className="flex items-center gap-3 p-3 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10">
+                        <i className="fas fa-map-marker-alt text-[#3B82F6] w-4 text-center shrink-0 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]"></i>
                         <div className="min-w-0">
-                          <p className="text-[10px] text-slate-500 font-bold uppercase">Район</p>
-                          <p className="text-sm text-slate-300 truncate">{viewingCustomer.location}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Район</p>
+                          <p className="text-sm text-slate-200 truncate">{viewingCustomer.location}</p>
                         </div>
                       </div>
                     )}
 
                     {viewingCustomer.rating != null && (
-                      <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10">
-                        <i className="fas fa-star text-yellow-400 w-4 text-center shrink-0"></i>
+                      <div className="flex items-center gap-3 p-3 bg-white/5 backdrop-blur-sm rounded-xl border border-white/10">
+                        <i className="fas fa-star text-yellow-400 w-4 text-center shrink-0 drop-shadow-[0_0_8px_rgba(250,204,21,0.6)]"></i>
                         <div>
-                          <p className="text-[10px] text-slate-500 font-bold uppercase">Рейтинг</p>
-                          <p className="text-sm text-slate-200 font-bold">{viewingCustomer.rating} / 5.0</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">Рейтинг</p>
+                          <p className="text-sm text-white font-bold">{viewingCustomer.rating} / 5.0</p>
                         </div>
                       </div>
                     )}
@@ -3741,7 +3750,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                   {/* Кнопка закрытия */}
                   <button
                     onClick={() => setViewingCustomer(null)}
-                    className="w-full mt-5 py-3 rounded-2xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 transition font-semibold text-sm"
+                    className="w-full mt-5 py-3 rounded-2xl bg-white/5 border border-white/10 text-slate-300 hover:text-white hover:bg-white/10 transition font-semibold text-sm"
                   >
                     Закрыть
                   </button>
@@ -3751,29 +3760,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
           )}
 
           {subscribeConfirmForCustomerId && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200 modal-open">
-              <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl scale-100">
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200 modal-open">
+              <div className="bg-[#1A1A1A] border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7)] scale-100">
                 <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-yellow-50 rounded-full flex items-center justify-center text-yellow-500 mx-auto mb-4">
-                    <i className="fas fa-crown text-2xl"></i>
+                  <div className="w-16 h-16 bg-[#D4AF37]/20 rounded-full flex items-center justify-center text-[#FFDF00] mx-auto mb-4 border border-[#D4AF37]/30 shadow-[0_0_20px_rgba(212,175,55,0.2)]">
+                    <Crown size={28} style={{ filter: 'drop-shadow(0 0 10px rgba(255,223,0,0.6))' }} />
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900">Подтвердите подписку</h3>
-                  <p className="text-sm text-gray-500 mt-1">Перед оформлением ознакомьтесь с преимуществами.</p>
+                  <h3 className="text-xl font-bold text-white drop-shadow-sm">Подтвердите подписку</h3>
+                  <p className="text-sm text-slate-400 mt-1">Перед оформлением ознакомьтесь с преимуществами.</p>
                 </div>
                 <div className="space-y-3 mb-6">
-                  <p className="text-gray-700 text-sm">Если заказчик (инвалид) регистрирует транспорт в официальном реестре, а вы сопровождаете его — вы получаете законные преимущества передвижения:</p>
-                  <ul className="text-sm text-gray-900 space-y-2">
-                    <li>✨ Парковка на местах для инвалидов</li>
-                    <li>✨ Бесплатные городские парковки (при наличии регистрации)</li>
-                    <li>✨ Быстрый доступ к больницам, МФЦ и госучреждениям</li>
-                    <li>✨ Минимум времени на поиск парковки</li>
-                    <li>✨ Защита от штрафов при соблюдении правил</li>
+                  <p className="text-slate-300 text-sm leading-relaxed">Если заказчик (инвалид) регистрирует транспорт в официальном реестре, а вы сопровождаете его — вы получаете законные преимущества передвижения:</p>
+                  <ul className="text-sm text-slate-200 space-y-2">
+                    <li className="flex items-center gap-2"><span className="text-[#D4AF37]">✨</span> Парковка на местах для инвалидов</li>
+                    <li className="flex items-center gap-2"><span className="text-[#D4AF37]">✨</span> Бесплатные городские парковки</li>
+                    <li className="flex items-center gap-2"><span className="text-[#D4AF37]">✨</span> Быстрый доступ к больницам и МФЦ</li>
+                    <li className="flex items-center gap-2"><span className="text-[#D4AF37]">✨</span> Минимум времени на поиск парковки</li>
+                    <li className="flex items-center gap-2"><span className="text-[#D4AF37]">✨</span> Защита от штрафов при соблюдении правил</li>
                   </ul>
                 </div>
                 <div className="flex justify-end gap-3">
                   <button
                     onClick={() => setSubscribeConfirmForCustomerId(null)}
-                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                    className="px-4 py-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition"
                   >
                     Отмена
                   </button>
@@ -3784,7 +3793,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                         setSubscribeConfirmForCustomerId(null);
                       }
                     }}
-                    className="px-6 py-2 bg-yellow-400 text-gray-900 font-bold rounded-lg hover:bg-yellow-500 transition shadow-lg"
+                    className="px-6 py-2 bg-gradient-to-r from-[#D4AF37] to-[#B8860B] text-black font-bold rounded-lg hover:from-[#FFDF00] hover:to-[#D4AF37] transition shadow-[0_4px_20px_rgba(212,175,55,0.4)]"
                   >
                     Подтвердить
                   </button>
@@ -3795,14 +3804,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
           {/* Cancel Subscription Modal */}
           {isCancelSubscriptionModalOpen && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200 modal-open">
-              <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl scale-100">
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[200] p-4 animate-in fade-in duration-200 modal-open">
+              <div className="bg-[#1A1A1A] border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7)] scale-100">
                 <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center text-red-500 mx-auto mb-4">
-                    <i className="fas fa-heart-broken text-2xl"></i>
+                  <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center text-red-500 mx-auto mb-4 border border-red-500/30">
+                    <i className="fas fa-heart-broken text-2xl drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]"></i>
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900">Отмена подписки</h3>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <h3 className="text-xl font-bold text-white drop-shadow-sm">Отмена подписки</h3>
+                  <p className="text-sm text-slate-400 mt-1">
                     {user.role === UserRole.CUSTOMER
                       ? 'Вы уверены, что хотите отказаться от услуг помощника?'
                       : 'Вы уверены, что хотите отменить подписку на заказчика?'}
@@ -3810,9 +3819,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                 </div>
 
                 <div className="mb-6">
-                  <label className="block text-sm font-bold text-gray-700 mb-2">Укажите причину отмены <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-bold text-slate-300 mb-2">Укажите причину отмены <span className="text-red-500">*</span></label>
                   <textarea
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 focus:ring-2 focus:ring-red-500 min-h-[100px] resize-none text-sm text-gray-900 placeholder-gray-400"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-4 focus:ring-2 focus:ring-red-500/50 focus:border-red-500/30 min-h-[100px] resize-none text-sm text-white placeholder-slate-500 outline-none"
                     placeholder={user.role === UserRole.CUSTOMER ? "Например: помощник не выходит на связь..." : "Например: изменились обстоятельства..."}
                     value={cancelSubscriptionReason}
                     onChange={(e) => setCancelSubscriptionReason(e.target.value)}
@@ -3825,14 +3834,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                       setIsCancelSubscriptionModalOpen(false);
                       setCancelSubscriptionReason('');
                     }}
-                    className="w-[90%] px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                    className="w-[90%] px-4 py-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition"
                   >
                     Вернуться
                   </button>
                   <button
                     onClick={handleCancelSubscription}
                     disabled={!cancelSubscriptionReason.trim()}
-                    className="w-[90%] px-6 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition shadow-lg shadow-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-[90%] px-6 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white font-bold rounded-lg hover:from-red-500 hover:to-red-600 transition shadow-[0_4px_20px_rgba(220,38,38,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Отменить
                   </button>

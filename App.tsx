@@ -1,16 +1,16 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { UserRole, OrderStatus, User } from './types';
 import Layout from './components/Layout';
-import Landing from './pages/Landing';
-import Auth from './pages/Auth';
-import Dashboard from './pages/Dashboard';
-import Admin from './pages/Admin';
-import Terms from './pages/Terms';
-import UserProfile from './pages/UserProfile';
-import CreateOrder from './pages/CreateOrder';
-import Executors from './pages/Executors';
-import OpenOrders from './pages/OpenOrders';
+const Landing = lazy(() => import('./pages/Landing'));
+const Auth = lazy(() => import('./pages/Auth'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Admin = lazy(() => import('./pages/Admin'));
+const Terms = lazy(() => import('./pages/Terms'));
+const UserProfile = lazy(() => import('./pages/UserProfile'));
+const CreateOrder = lazy(() => import('./pages/CreateOrder'));
+const Executors = lazy(() => import('./pages/Executors'));
+const OpenOrders = lazy(() => import('./pages/OpenOrders'));
 import { useAuth } from './context/AuthContext';
 import { Toaster, toast } from 'react-hot-toast';
 
@@ -60,32 +60,41 @@ const App: React.FC = () => {
     <ErrorBoundary>
         <Toaster position="top-right" />
         <Layout>
-          <Routes>
-            <Route path="/" element={
-              <Landing 
-                onViewProfile={(e) => navigate(`/users/${e.id}`)} 
-                onBook={handleBook} 
-              />
-            } />
-            <Route path="/auth" element={<Auth onSuccess={() => navigate('/dashboard')} />} />
-            <Route path="/dashboard" element={
-              user ? <Dashboard user={user} onUpdateStatus={handleUpdateStatus} /> : <Auth onSuccess={() => navigate('/dashboard')} />
-            } />
-            <Route path="/admin" element={
-              user?.role === UserRole.ADMIN ? <Admin /> : <Landing onViewProfile={() => {}} onBook={() => {}} />
-            } />
-            <Route path="/executors" element={
-              user ? (
-                user.role === UserRole.CUSTOMER ? <Executors /> : <Dashboard user={user} onUpdateStatus={handleUpdateStatus} />
-              ) : (
-                <Auth onSuccess={() => navigate('/executors')} />
-              )
-            } />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/users/:id" element={<UserProfile onBook={(id) => navigate(`/orders/create?executorId=${id}`)} />} />
-            <Route path="/orders/create" element={<CreateOrder />} />
-            <Route path="/orders/open" element={<OpenOrders />} />
-          </Routes>
+          <Suspense fallback={
+            <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center">
+              <div className="flex flex-col items-center gap-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#3B82F6] border-t-transparent"></div>
+                <div className="text-slate-400 font-medium animate-pulse">Загрузка…</div>
+              </div>
+            </div>
+          }>
+            <Routes>
+              <Route path="/" element={
+                <Landing 
+                  onViewProfile={(e) => navigate(`/users/${e.id}`)} 
+                  onBook={handleBook} 
+                />
+              } />
+              <Route path="/auth" element={<Auth onSuccess={() => navigate('/dashboard')} />} />
+              <Route path="/dashboard" element={
+                user ? <Dashboard user={user} onUpdateStatus={handleUpdateStatus} /> : <Auth onSuccess={() => navigate('/dashboard')} />
+              } />
+              <Route path="/admin" element={
+                user?.role === UserRole.ADMIN ? <Admin /> : <Landing onViewProfile={() => {}} onBook={() => {}} />
+              } />
+              <Route path="/executors" element={
+                user ? (
+                  user.role === UserRole.CUSTOMER ? <Executors /> : <Dashboard user={user} onUpdateStatus={handleUpdateStatus} />
+                ) : (
+                  <Auth onSuccess={() => navigate('/executors')} />
+                )
+              } />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/users/:id" element={<UserProfile onBook={(id) => navigate(`/orders/create?executorId=${id}`)} />} />
+              <Route path="/orders/create" element={<CreateOrder />} />
+              <Route path="/orders/open" element={<OpenOrders />} />
+            </Routes>
+          </Suspense>
         </Layout>
     </ErrorBoundary>
   );
