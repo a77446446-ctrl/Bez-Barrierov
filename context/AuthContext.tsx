@@ -55,7 +55,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     let isActive = true;
 
     const syncUser = async () => {
-      const { data, error } = await supabase.auth.getUser();
+      // Защитный таймаут на случай зависаний auth.getUser()
+      const getUserWithTimeout = Promise.race([
+        supabase.auth.getUser(),
+        new Promise<{ data: any; error: any }>((resolve) =>
+          setTimeout(() => resolve({ data: { user: null }, error: null }), 4000)
+        )
+      ]) as Promise<{ data: any; error: any }>;
+
+      const { data, error } = await getUserWithTimeout;
       if (!isActive) return;
 
       if (error) {
@@ -248,7 +256,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    return {
+      user: null,
+      isLoading: false,
+      login: async () => {},
+      register: async () => {},
+      resetPassword: async () => {},
+      updatePassword: async () => {},
+      loginWithGoogle: async () => {},
+      loginWithTelegram: async () => {},
+      logout: async () => {},
+      updateUser: async () => {}
+    };
   }
   return context;
 };

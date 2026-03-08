@@ -143,7 +143,7 @@ bot.on('text', async (ctx) => {
     // 2. Обычный пользователь — проверяем активную сессию чата
     const session = chatSessions.get(`session_${chatId}`);
     if (!session) {
-        return ctx.reply('ℹ️ Перейдите в приложение и нажмите кнопку «Написать», чтобы отправить сообщение.');
+        return ctx.reply('ℹ️ Чтобы начать чат по заказу, нажмите кнопку Start вверху чата (после открытия бота по ссылке из приложения), затем отправьте сообщение.');
     }
 
     const { orderId, senderId, receiverId } = session;

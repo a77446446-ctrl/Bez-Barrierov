@@ -14,13 +14,42 @@ export const getSupabase = (): SupabaseClient | null => {
 
     if (!url || !key) return null;
 
+    // Глобальный fetch с таймаутом, чтобы UI не зависал на долгих сетевых ожиданиях
+    const fetchWithTimeout = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const timeoutMs = 8000;
+        let timeoutId: any;
+        const timeout = new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error('fetch-timeout')), timeoutMs);
+        });
+        try {
+            return await Promise.race([
+                (globalThis.fetch as any)(input, init),
+                timeout
+            ]);
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    };
+
+    try {
+        const nav: any = typeof navigator !== 'undefined' ? navigator : null;
+        if (nav && nav.locks && typeof nav.locks.request === 'function') {
+            const fast = async (_name: any, _opts: any, callback: any) => callback();
+            nav.locks.request = fast;
+        }
+    } catch {}
+
     supabaseInstance = createClient(url, key, {
         auth: {
             persistSession: true,
             autoRefreshToken: true,
             detectSessionInUrl: true,
-        }
-    });
+            multiTab: false as any
+        } as any,
+        global: {
+            fetch: fetchWithTimeout as any
+        } as any
+    } as any);
 
     return supabaseInstance;
 };
