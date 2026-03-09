@@ -144,7 +144,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {isInstallable && (
         <div className="fixed top-0 inset-x-0 z-[200] bg-careem-primary border-b border-blue-400 text-white px-4 py-3 flex items-center justify-between shadow-2xl animate-in slide-in-from-top duration-500">
           <div className="flex items-center gap-3">
-            <img src="/pwa-icon.png" alt="App Icon" className="w-10 h-10 rounded-xl shadow-md border border-white/20" />
+            <img src="/app-icon.png" alt="App Icon" className="w-10 h-10 rounded-xl shadow-md border border-white/20" />
             <div>
               <p className="font-display font-bold text-sm">БезБарьеров</p>
               <p className="text-xs text-blue-100 font-medium">Установите приложение для быстрого доступа</p>

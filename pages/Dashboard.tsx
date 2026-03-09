@@ -3103,7 +3103,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                     const canRequestSubscription = order.executorId === user.id && order.status !== OrderStatus.OPEN;
 
                                     const BOT_USERNAME = ((import.meta as any).env?.VITE_TELEGRAM_BOT_USERNAME as string) || 'NoBarriers_BOT';
-                                    const chatLink = `https://t.me/${BOT_USERNAME}?start=chat_${order.id.replace(/-/g, '')}_e`;
+                                    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(order.id);
+                                    const chatLink = isUuid
+                                      ? `https://t.me/${BOT_USERNAME}?start=chat_${order.id.replace(/-/g, '')}_e`
+                                      : (customer?.telegramId
+                                          ? `https://t.me/${customer.telegramId.replace('@', '')}`
+                                          : customer?.phone
+                                            ? `https://t.me/+${customer.phone.replace(/[^0-9]/g, '')}`
+                                            : 'https://t.me/');
 
                                     return (
                                       <div className="w-full mt-4 p-3 sm:p-4 bg-white/5 rounded-2xl border border-white/10">
@@ -3152,6 +3159,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                             href={chatLink}
                                             target="_blank"
                                             rel="noopener noreferrer"
+                                            onClick={() => {
+                                              if (isUuid) {
+                                                toast('В Telegram нажмите «Start», затем отправьте сообщение', { icon: 'ℹ️' });
+                                              }
+                                            }}
                                             className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-[#2D6BFF]/15 border border-[#2D6BFF]/30 rounded-xl text-xs font-bold text-[#6899ff] hover:bg-[#2D6BFF]/25 active:scale-95 transition"
                                           >
                                             <i className="fab fa-telegram-plane text-sm"></i>
@@ -3200,7 +3212,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                     if (!executor) return null;
 
                                     const BOT_USERNAME = ((import.meta as any).env?.VITE_TELEGRAM_BOT_USERNAME as string) || 'NoBarriers_BOT';
-                                    const chatLink = `https://t.me/${BOT_USERNAME}?start=chat_${order.id.replace(/-/g, '')}_c`;
+                                    const isUuid2 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(order.id);
+                                    const chatLink = isUuid2
+                                      ? `https://t.me/${BOT_USERNAME}?start=chat_${order.id.replace(/-/g, '')}_c`
+                                      : (executor?.telegramId
+                                          ? `https://t.me/${executor.telegramId.replace('@', '')}`
+                                          : executor?.phone
+                                            ? `https://t.me/+${executor.phone.replace(/[^0-9]/g, '')}`
+                                            : 'https://t.me/');
 
                                     return (
                                       <div className="w-full mt-4 p-4 bg-white/5 rounded-2xl border border-white/10 animate-in fade-in duration-500">
@@ -3247,6 +3266,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                                 href={chatLink}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
+                                                onClick={() => {
+                                                  if (isUuid2) {
+                                                    toast('В Telegram нажмите «Start», затем отправьте сообщение', { icon: 'ℹ️' });
+                                                  }
+                                                }}
                                                 className="flex items-center gap-2 px-3 py-1.5 bg-[#2D6BFF]/15 border border-[#2D6BFF]/30 rounded-xl text-xs font-bold text-[#6899ff] hover:bg-[#2D6BFF]/25 transition"
                                               >
                                                 <i className="fab fa-telegram-plane"></i>
