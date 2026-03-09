@@ -3102,7 +3102,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
                                     const canRequestSubscription = order.executorId === user.id && order.status !== OrderStatus.OPEN;
 
-                                    const BOT_USERNAME = 'NoBarriers_BOT';
+                                    const BOT_USERNAME = ((import.meta as any).env?.VITE_TELEGRAM_BOT_USERNAME as string) || 'NoBarriers_BOT';
                                     const chatLink = `https://t.me/${BOT_USERNAME}?start=chat_${order.id.replace(/-/g, '')}_e`;
 
                                     return (
@@ -3199,7 +3199,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                     const executor = allUsers.find(u => u.id === order.executorId);
                                     if (!executor) return null;
 
-                                    const BOT_USERNAME = 'NoBarriers_BOT';
+                                    const BOT_USERNAME = ((import.meta as any).env?.VITE_TELEGRAM_BOT_USERNAME as string) || 'NoBarriers_BOT';
                                     const chatLink = `https://t.me/${BOT_USERNAME}?start=chat_${order.id.replace(/-/g, '')}_c`;
 
                                     return (

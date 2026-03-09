@@ -254,8 +254,13 @@ bot.action(/^edit_(.+)$/, async (ctx) => {
 
 // ─── Запуск ──────────────────────────────────────────────────────────────────
 bot.launch()
-    .then(() => {
-        console.log('🤖 БезБарьеров бот запущен! (@NoBarriers_BOT)');
+    .then(async () => {
+        try {
+            const me = await bot.telegram.getMe();
+            console.log(`🤖 БезБарьеров бот запущен! (@${me?.username || 'unknown'})`);
+        } catch {
+            console.log('🤖 БезБарьеров бот запущен! (имя бота недоступно)');
+        }
         if (ADMIN_IDS.length) {
             console.log(`📬 Сообщения на проверку → ${ADMIN_IDS.join(', ')}`);
         } else {
