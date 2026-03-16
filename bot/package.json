@@ -10,6 +10,8 @@
     "dependencies": {
         "telegraf": "^4.16.3",
         "@supabase/supabase-js": "^2.39.0",
-        "dotenv": "^16.3.1"
+        "dotenv": "^16.3.1",
+        "https-proxy-agent": "^7.0.2",
+        "socks-proxy-agent": "^8.0.2"
     }
 }

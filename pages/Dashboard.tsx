@@ -2957,9 +2957,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                     <div className="grid grid-cols-1 gap-4">
                       {/* Active Orders */}
                       {activeOrders.map(order => (
-                        <div key={order.id} className="p-0 rounded-[16px] border-0 overflow-hidden transition duration-300 hover:shadow-[0_0_30px_rgba(59,130,246,0.3)]">
+                          <div key={order.id} className="p-0 rounded-[16px] border-0 overflow-hidden transition duration-300 hover:shadow-[0_0_30px_rgba(59,130,246,0.3)]">
                           {/* Inner Card Container with Inner Shadow */}
-                          <div className="m-0 p-6 rounded-[16px] relative overflow-hidden group transition-all duration-300 text-white" style={{ background: 'rgba(26, 26, 26, 0.5)', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                          <div className="m-0 p-4 sm:p-6 rounded-[16px] relative overflow-hidden group transition-all duration-300 text-white" style={{ background: 'rgba(26, 26, 26, 0.5)', WebkitBackdropFilter: 'blur(10px)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
                             <div className="absolute top-0 right-0 w-32 h-32 bg-[#3B82F6]/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
                             <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#3B82F6]/5 rounded-full blur-2xl -ml-10 -mb-10 pointer-events-none"></div>
                             {(() => {
@@ -3015,16 +3015,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                               </div>
 
                               {/* Body: Price & Info */}
-                              <div className="flex items-center justify-between rounded-[12px] p-4" style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                              <div className="flex items-center justify-between rounded-[12px] p-3 sm:p-4" style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
                                 <div>
                                   <p className="text-[10px] uppercase text-slate-400 font-bold mb-1 tracking-wider">Стоимость услуги</p>
                                   <p className="text-[26px] font-black" style={{ color: '#10B981', textShadow: '0 0 15px rgba(16,185,129,0.4)' }}>{order.totalPrice} <span className="text-sm font-medium opacity-80">₽</span></p>
                                 </div>
-                                <div className="h-8 w-px bg-white/10 mx-4"></div>
+                                <div className="h-8 w-px bg-white/10 mx-2 sm:mx-4"></div>
                                 <div className="text-right">
                                   <button
                                     onClick={() => setSelectedOrderDetails(order)}
-                                    className="text-xs font-bold text-careem-primary hover:text-white transition flex items-center gap-1 group"
+                                    className="text-xs font-bold text-careem-primary hover:text-white transition flex items-center gap-1.5 group px-3 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10"
                                   >
                                     Подробнее <i className="fas fa-arrow-right transform group-hover:translate-x-1 transition-transform"></i>
                                   </button>
@@ -3127,6 +3127,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                               alt={customer.name}
                                               className="w-12 h-12 rounded-2xl object-cover border-2 border-white/10 group-hover/avatar:border-careem-primary/60 transition shadow-sm"
                                             />
+                                            {(() => {
+                                              const rawRating = (customer as any).rating;
+                                              const numericRating = typeof rawRating === 'number' ? rawRating : Number(rawRating);
+                                              const ratingText = Number.isFinite(numericRating) ? numericRating.toFixed(1) : null;
+                                              if (!ratingText) return null;
+                                              return (
+                                                <div className="absolute bottom-0 right-0 -translate-x-1/4 -translate-y-1/4 bg-white px-1.5 py-0.5 rounded-lg shadow-md border border-gray-100 flex items-center gap-1">
+                                                  <i className="fas fa-star text-yellow-400 text-[10px]"></i>
+                                                  <span className="text-xs font-bold text-gray-700">{ratingText}</span>
+                                                </div>
+                                              );
+                                            })()}
                                             {/* Вспышка при наведении */}
                                             <div className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover/avatar:opacity-100 transition flex items-center justify-center">
                                               <i className="fas fa-eye text-white text-xs"></i>
@@ -3222,7 +3234,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                             : 'https://t.me/');
 
                                     return (
-                                      <div className="w-full mt-4 p-4 bg-white/5 rounded-2xl border border-white/10 animate-in fade-in duration-500">
+                                      <div className="w-full mt-4 p-3 sm:p-4 bg-white/5 rounded-2xl border border-white/10 animate-in fade-in duration-500">
                                         <div className="flex items-center justify-between mb-3">
                                           <h5 className="font-bold text-sm text-slate-300">Исполнитель назначен</h5>
                                           <span className={`text-xs font-black uppercase tracking-wide ${getStatusColor(order.status)}`}>
@@ -3231,22 +3243,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                         </div>
 
                                         <div className="flex flex-col sm:flex-row gap-4">
-                                          <div className="shrink-0 relative">
+                                          {(() => {
+                                            const rawRating = executor.rating;
+                                            const numericRating = typeof rawRating === 'number' ? rawRating : Number(rawRating);
+                                            const ratingText = Number.isFinite(numericRating) ? numericRating.toFixed(1) : null;
+                                            return (
+                                              <div className="shrink-0 relative">
                                             <img
                                               src={executor.avatar || `https://ui-avatars.com/api/?name=${executor.name}`}
                                               alt={executor.name}
                                               className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-md max-w-full"
                                             />
-                                            {(realRatings[executor.id] || executor.rating) && (
-                                              <div className="absolute -bottom-2 -right-2 bg-white px-1.5 py-0.5 rounded-lg shadow-sm border border-gray-100 flex items-center gap-1">
+                                            {ratingText && (
+                                              <div className="absolute bottom-0 right-0 translate-x-1/4 translate-y-1/4 bg-white px-1.5 py-0.5 rounded-lg shadow-md border border-gray-100 flex items-center gap-1">
                                                 <i className="fas fa-star text-yellow-400 text-[10px]"></i>
-                                                <span className="text-xs font-bold text-gray-700">{realRatings[executor.id] || executor.rating}</span>
+                                                <span className="text-xs font-bold text-gray-700">{ratingText}</span>
                                               </div>
                                             )}
                                           </div>
+                                            );
+                                          })()}
 
                                           <div className="flex-grow">
-                                            <h4 className="font-bold text-slate-100 text-lg leading-tight mb-1">{executor.name}</h4>
+                                            <h4 className="font-bold text-slate-100 text-lg leading-tight mb-1 truncate">{executor.name}</h4>
 
                                             {executor.description && (
                                               <p className="text-xs text-slate-300 mb-3 line-clamp-2">{executor.description}</p>
@@ -3256,7 +3275,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                               {/* Профиль */}
                                               <button
                                                 onClick={() => setViewingCustomer(executor as any)}
-                                                className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-white/10 transition"
+                                                className="flex-1 sm:flex-none min-w-[140px] justify-center flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-white/10 transition"
                                               >
                                                 <i className="fas fa-user"></i>
                                                 Портфолио
@@ -3271,7 +3290,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                                     toast('В Telegram нажмите «Start», затем отправьте сообщение', { icon: 'ℹ️' });
                                                   }
                                                 }}
-                                                className="flex items-center gap-2 px-3 py-1.5 bg-[#2D6BFF]/15 border border-[#2D6BFF]/30 rounded-xl text-xs font-bold text-[#6899ff] hover:bg-[#2D6BFF]/25 transition"
+                                                className="flex-1 sm:flex-none min-w-[140px] justify-center flex items-center gap-2 px-3 py-2 bg-[#2D6BFF]/15 border border-[#2D6BFF]/30 rounded-xl text-xs font-bold text-[#6899ff] hover:bg-[#2D6BFF]/25 transition"
                                               >
                                                 <i className="fab fa-telegram-plane"></i>
                                                 Написать
@@ -3309,7 +3328,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                                 <p className="font-bold text-sm text-gray-900">{responder.name}</p>
                                                 <div className="flex items-center gap-1 bg-white px-1.5 py-0.5 rounded-lg shadow-sm border border-gray-100 mt-1 w-fit">
                                                   <i className="fas fa-star text-yellow-400 text-[10px]"></i>
-                                                  <span className="text-xs font-bold text-gray-700">{realRatings[responder.id] || responder.rating || '0.0'}</span>
+                                                  <span className="text-xs font-bold text-gray-700">{typeof responder.rating === 'number' ? responder.rating.toFixed(1) : (Number(responder.rating) ? Number(responder.rating).toFixed(1) : '0.0')}</span>
                                                 </div>
                                               </div>
                                             </div>
@@ -3328,7 +3347,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
 
                                 {/* Order Messages Feed */}
                                 {orderMessages[order.id] && orderMessages[order.id].length > 0 && (
-                                  <div className="w-full mt-4 p-4 bg-white/5 rounded-2xl border border-white/10">
+                                  <div className="w-full mt-4 p-3 sm:p-4 bg-white/5 rounded-2xl border border-white/10">
                                     <h5 className="font-bold text-sm text-slate-300 mb-3 flex items-center gap-2">
                                       <i className="fas fa-comments text-careem-primary"></i> Сообщения по заказу
                                     </h5>
@@ -3345,7 +3364,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                               <span className="text-[10px] text-zinc-400 font-bold">{isMine ? 'Вы' : sender?.name || 'Пользователь'}</span>
                                               <span className="text-[9px] text-zinc-500">{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                             </div>
-                                            <div className={`px-3 py-2 rounded-2xl text-sm max-w-[85%] ${isMine ? 'bg-[#2D6BFF] text-white rounded-tr-sm' : 'bg-white/10 text-slate-200 rounded-tl-sm'}`}>
+                                            <div className={`px-3 py-2 rounded-2xl text-sm max-w-[85%] break-words whitespace-pre-wrap overflow-hidden ${isMine ? 'bg-[#2D6BFF] text-white rounded-tr-sm' : 'bg-white/10 text-slate-200 rounded-tl-sm'}`}>
                                               {msg.text}
                                             </div>
                                           </div>
@@ -3414,10 +3433,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateStatus }) => {
                                             await handleDeleteOrder(order.id);
                                           }
                                         }}
-                                        className="w-full bg-red-50 text-red-600 border border-red-100 py-2.5 rounded-xl hover:bg-red-100 transition font-bold text-sm flex items-center justify-center gap-2"
+                                        className="w-full bg-red-50 text-red-600 border border-red-100 px-4 py-2.5 rounded-xl hover:bg-red-100 transition font-bold text-sm flex flex-wrap items-center justify-center gap-2 text-center"
                                         title="Отменить и удалить"
                                       >
-                                        <i className="fas fa-times"></i> Отменить запрос к помощнику
+                                        <i className="fas fa-times shrink-0"></i>
+                                        <span className="min-w-0 leading-tight whitespace-normal break-words">Отменить запрос к помощнику</span>
                                       </button>
                                     );
                                   })()

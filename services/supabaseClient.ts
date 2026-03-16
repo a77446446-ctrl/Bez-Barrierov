@@ -16,16 +16,21 @@ export const getSupabase = (): SupabaseClient | null => {
 
     // Глобальный fetch с таймаутом, чтобы UI не зависал на долгих сетевых ожиданиях
     const fetchWithTimeout = async (input: RequestInfo | URL, init?: RequestInit) => {
-        const timeoutMs = 8000;
-        let timeoutId: any;
-        const timeout = new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error('fetch-timeout')), timeoutMs);
-        });
+        const timeoutMs = 20000;
+        if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
+            throw new Error('offline');
+        }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         try {
-            return await Promise.race([
-                (globalThis.fetch as any)(input, init),
-                timeout
-            ]);
+            const mergedInit: RequestInit = {
+                ...(init || {}),
+                signal: init?.signal ?? controller.signal
+            };
+            return await (globalThis.fetch as any)(input, mergedInit);
+        } catch (e: any) {
+            if (e?.name === 'AbortError') throw new Error('fetch-timeout');
+            throw e;
         } finally {
             clearTimeout(timeoutId);
         }
